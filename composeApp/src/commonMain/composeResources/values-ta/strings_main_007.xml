@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_licenses_attributions_introdb_title">IntroDB</string>
-    <string name="settings_licenses_attributions_introdb_body">Skip கட்டுப்பாடுகளில் பயன்படுத்தப்படும் intro, recap, credits மற்றும் preview நேரக் குறியீடுகளுக்கு Nuvio சமூகத்தினர் வழங்கும் IntroDB API-ஐப் பயன்படுத்துகிறது. Nuvio, IntroDB உடன் இணைக்கப்பட்டதோ அதன் ஆதரவைப் பெற்றதோ அல்ல.</string>
+    <string name="settings_licenses_attributions_introdb_body">Skip கட்டுப்பாடுகளில் பயன்படுத்தப்படும் intro, recap, credits மற்றும் preview நேரக் குறியீடுகளுக்கு CinemaOS சமூகத்தினர் வழங்கும் IntroDB API-ஐப் பயன்படுத்துகிறது. CinemaOS, IntroDB உடன் இணைக்கப்பட்டதோ அதன் ஆதரவைப் பெற்றதோ அல்ல.</string>
     <string name="settings_licenses_attributions_mpvkit_title">MPVKit</string>
     <string name="settings_licenses_attributions_mpvkit_body">iOS பதிப்புகளில் பிளேபேக்கிற்குப் பயன்படுத்தப்படுகிறது.</string>
     <string name="settings_licenses_attributions_mpvkit_license">MPVKit மூலக் குறியீடு மட்டும் LGPL v3.0 உரிமத்தின் கீழ் உள்ளது. libmpv மற்றும் FFmpeg நூலகங்கள் உட்பட MPVKit தொகுப்புகளும் LGPL v3.0 உரிமத்தின் கீழ் உள்ளன.</string>
