@@ -73,6 +73,21 @@ data class MovieCollectionRoute(
         get() = collectionName
 }
 
+/** CinemaOS: month calendar of episodes and releases for the user's shows (opened from Library). */
+@Serializable
+data class CalendarRoute(override val title: String = "") : AppRoute
+
+/** CinemaOS: titles available on one streaming service (opened from the Home "Providers" row). */
+@Serializable
+data class ProviderRoute(
+    val providerId: Int,
+    val providerName: String,
+    val logoPath: String? = null,
+) : AppRoute {
+    override val title: String
+        get() = providerName
+}
+
 /** A settings leaf promoted from the former in-screen page state machine. */
 @Serializable
 data class SettingsPageRoute(

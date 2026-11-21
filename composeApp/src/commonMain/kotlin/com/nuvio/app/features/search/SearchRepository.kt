@@ -443,8 +443,16 @@ object SearchRepository {
         val current = _discoverUiState.value
         val selectedCatalog = current.selectedCatalog ?: return
         if (!selectedCatalog.isTmdb) return
-        val updated = transform(current.filters)
-            .sanitizedFor(isTv = selectedCatalog.type != "movie", mediaChanged = false)
+        val isAnime = selectedCatalog.type == "anime"
+        val transformed = transform(current.filters).let { next ->
+            // Anime genre ids differ between the TV and movie formats, so a format change starts with no genres.
+            if (isAnime && next.animeFormat != current.filters.animeFormat) next.copy(genreIds = emptySet()) else next
+        }
+        val updated = transformed.sanitizedFor(
+            isTv = discoverIsTv(selectedCatalog.type, transformed),
+            mediaChanged = false,
+            isAnime = isAnime,
+        )
         if (updated == current.filters) return
         _discoverUiState.value = current.copy(
             filters = updated,
@@ -605,7 +613,7 @@ object SearchRepository {
                 val server = selectedCatalog.server
                 if (selectedCatalog.isTmdb) {
                     TmdbDiscoverService.discover(
-                        isTv = selectedCatalog.type != "movie",
+                        isTv = discoverIsTv(selectedCatalog.type, current.filters),
                         isAnime = selectedCatalog.type == "anime",
                         filters = current.filters,
                         skip = requestedSkip,
@@ -792,5 +800,9 @@ private fun DiscoverFilters.forCatalogChange(
 ): DiscoverFilters {
     if (!new.isTmdb) return this
     val mediaChanged = old == null || !old.isTmdb || old.type != new.type
-    return sanitizedFor(isTv = new.type != "movie", mediaChanged = mediaChanged)
+    return sanitizedFor(
+        isTv = discoverIsTv(new.type, this),
+        mediaChanged = mediaChanged,
+        isAnime = new.type == "anime",
+    )
 }

@@ -69,8 +69,12 @@ data class DiscoverUiState(
     val isTmdbSelected: Boolean
         get() = selectedCatalog?.isTmdb == true
 
+    /** Effective TMDB media type: anime follows its Format filter (TV series / Movie), the rest follow the catalog type. */
     val isTmdbTv: Boolean
-        get() = selectedCatalog?.let { it.isTmdb && it.type != "movie" } == true
+        get() = selectedCatalog?.let { it.isTmdb && discoverIsTv(it.type, filters) } == true
+
+    val isTmdbAnime: Boolean
+        get() = selectedCatalog?.let { it.isTmdb && it.type == "anime" } == true
 
     val canLoadMore: Boolean
         get() = nextSkip != null

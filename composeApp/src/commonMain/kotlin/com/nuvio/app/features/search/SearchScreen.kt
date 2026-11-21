@@ -76,7 +76,6 @@ import nuvio.composeapp.generated.resources.compose_nav_search
 import nuvio.composeapp.generated.resources.home_empty_no_sources_title
 import nuvio.composeapp.generated.resources.search_empty_no_sources_message
 import nuvio.composeapp.generated.resources.compose_search_clear
-import nuvio.composeapp.generated.resources.compose_search_discover_title
 import nuvio.composeapp.generated.resources.compose_search_empty_failed_message
 import nuvio.composeapp.generated.resources.compose_search_empty_failed_title
 import nuvio.composeapp.generated.resources.compose_search_empty_no_results_message
@@ -133,11 +132,6 @@ fun SearchScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var lastRequestedQuery by rememberSaveable { mutableStateOf<String?>(null) }
     var observedOfflineState by remember { mutableStateOf(false) }
-    val discoverInFocus by remember(query, listState) {
-        derivedStateOf {
-            query.isBlank() && listState.firstVisibleItemIndex > 0
-        }
-    }
 
     ScreenActivityEffect(scrollToTopRequests) { screenActive ->
         if (!screenActive) return@ScreenActivityEffect
@@ -239,11 +233,8 @@ fun SearchScreen(
         val homeSectionPadding = remember(maxWidth) {
             homeSectionHorizontalPaddingForWidth(maxWidth.value)
         }
-        val headerTitle = when {
-            query.isNotBlank() -> stringResource(Res.string.compose_nav_search)
-            discoverInFocus -> stringResource(Res.string.compose_search_discover_title)
-            else -> stringResource(Res.string.compose_nav_search)
-        }
+        // Discover has its own large page header below the search field, so the sticky title stays "Search".
+        val headerTitle = stringResource(Res.string.compose_nav_search)
 
         NuvioScreen(
             horizontalPadding = 0.dp,

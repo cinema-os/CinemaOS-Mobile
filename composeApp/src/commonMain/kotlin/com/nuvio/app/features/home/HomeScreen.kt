@@ -133,6 +133,7 @@ fun HomeScreen(
     continueWatchingDisintegrationRequest: DisintegrationRequest<String>? = null,
     onFolderClick: ((collectionId: String, folderId: String) -> Unit)? = null,
     onFirstCatalogRendered: (() -> Unit)? = null,
+    onProviderClick: ((com.nuvio.app.features.providers.StreamingProvider) -> Unit)? = null,
 ) {
     LaunchedEffect(Unit) {
         AddonRepository.initialize()
@@ -1171,6 +1172,16 @@ fun HomeScreen(
                         disintegrationRequest = continueWatchingDisintegrationRequest,
                     )
 
+                    if (onProviderClick != null) {
+                        item(key = HOME_PROVIDERS_SECTION_KEY, contentType = "providers") {
+                            com.nuvio.app.features.providers.HomeProvidersRow(
+                                sectionPadding = homeSectionPadding,
+                                onProviderClick = onProviderClick,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                            )
+                        }
+                    }
+
                     keyedEnabledHomeItems.forEach { keyedSettingsItem ->
                         val settingsItem = keyedSettingsItem.value
                         if (settingsItem.isCollection) {
@@ -1273,6 +1284,7 @@ private fun LazyListScope.homeContinueWatchingSections(
 private const val HOME_CATALOG_PREVIEW_LIMIT = 18
 private const val HOME_CONTINUE_WATCHING_SECTION_KEY = "home_continue_watching"
 private const val HOME_UPCOMING_SECTION_KEY = "home_upcoming"
+private const val HOME_PROVIDERS_SECTION_KEY = "home_providers"
 internal const val HomeContinueWatchingMaxRecentProgressItems = 300
 internal const val HomeNextUpInitialResolutionLimit = 32
 private const val NEXT_UP_RESOLUTION_CONCURRENCY = 4

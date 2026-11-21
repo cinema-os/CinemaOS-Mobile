@@ -364,6 +364,7 @@ internal fun MainAppContent(
     val continueWatchingSettingsTitle = stringResource(Res.string.compose_settings_page_continue_watching)
     val debridSettingsTitle = stringResource(Res.string.compose_settings_page_debrid)
     val downloadsTitle = stringResource(Res.string.compose_settings_root_downloads_title)
+    val calendarTitle = stringResource(Res.string.calendar_title)
     val addonsSettingsTitle = stringResource(Res.string.compose_settings_page_addons)
     val pluginsSettingsTitle = stringResource(Res.string.compose_settings_page_plugins)
     val accountSettingsTitle = stringResource(Res.string.compose_settings_page_account)
@@ -1459,6 +1460,16 @@ internal fun MainAppContent(
                                     }
                                 },
                                 onDownloadsClick = { navController.navigate(DownloadsRoute(downloadsTitle)) },
+                                onCalendarClick = { navController.navigate(CalendarRoute(calendarTitle)) },
+                                onProviderClick = { provider ->
+                                    navController.navigate(
+                                        ProviderRoute(
+                                            providerId = provider.id,
+                                            providerName = provider.name,
+                                            logoPath = provider.logoPath,
+                                        ),
+                                    )
+                                },
                                 onContinueWatchingClick = onContinueWatchingClick,
                                 onContinueWatchingLongPress = onContinueWatchingLongPress,
                                 // CinemaOS: single local profile, so no Switch Profile entry in Settings or its search.
@@ -1571,6 +1582,12 @@ internal fun MainAppContent(
                 }
                 entry<MovieCollectionRoute> { route ->
                     MovieCollectionDestination(route = route, navController = navController)
+                }
+                entry<CalendarRoute> { route ->
+                    CalendarDestination(route = route, navController = navController)
+                }
+                entry<ProviderRoute> { route ->
+                    ProviderDestination(route = route, navController = navController)
                 }
                 entry<StreamRoute> { route ->
                     StreamDestination(

@@ -10,6 +10,33 @@ enum class DiscoverSort(val tmdbValue: String) {
     Revenue("revenue.desc"),
     Upcoming("upcoming"),
     NowPlaying("now_playing"),
+    /** Anime only: popular titles that aired recently. */
+    Trending("trending"),
+}
+
+/** Sort orders offered for anime (everything else is hidden because it does not apply to anime browsing). */
+val AnimeSortOptions: List<DiscoverSort> = listOf(
+    DiscoverSort.Popular,
+    DiscoverSort.TopRated,
+    DiscoverSort.Newest,
+    DiscoverSort.Trending,
+)
+
+/** Anime format: a TV series (`/discover/tv`) or a movie (`/discover/movie`), both with the anime base rules. */
+enum class AnimeFormat { Tv, Movie }
+
+/** Broadcast seasons expressed as inclusive month ranges (`endDay` is the last day of [endMonth]). */
+enum class AnimeSeason(val startMonth: Int, val endMonth: Int, val endDay: Int) {
+    Winter(1, 3, 31),
+    Spring(4, 6, 30),
+    Summer(7, 9, 30),
+    Fall(10, 12, 31),
+}
+
+/** Airing status, mapped to TMDB TV `with_status` (0 = returning series, 3 = ended). */
+enum class AnimeStatus(val tmdbStatus: String) {
+    Airing("0"),
+    Ended("3"),
 }
 
 /** Runtime buckets in minutes, expressed as TMDB `with_runtime` bounds. */
@@ -84,25 +111,50 @@ data class DiscoverFilters(
     val providerId: String? = null,
     val networkId: String? = null,
     val certification: String? = null,
+    val animeFormat: AnimeFormat = AnimeFormat.Tv,
+    val animeSeason: AnimeSeason? = null,
+    val animeStatus: AnimeStatus? = null,
 ) {
     val activeCount: Int
         get() = (if (genreIds.isNotEmpty()) 1 else 0) +
             (if (sort != DiscoverSort.Popular) 1 else 0) +
-            listOf(yearKey, minRating, runtime, language, country, providerId, networkId, certification)
+            (if (animeFormat != AnimeFormat.Tv) 1 else 0) +
+            listOf(yearKey, minRating, runtime, language, country, providerId, networkId, certification, animeSeason, animeStatus)
                 .count { it != null }
 
     val isDefault: Boolean
         get() = activeCount == 0
 
-    /** Drops filters that only make sense for the other media type after switching Movies <-> Series. */
-    fun sanitizedFor(isTv: Boolean, mediaChanged: Boolean): DiscoverFilters =
-        copy(
+    /**
+     * Drops filters that only make sense for another media type after switching Movies / Series / Anime or the anime
+     * format. [isTv] is the effective TMDB media type (for anime it follows [animeFormat]).
+     */
+    fun sanitizedFor(isTv: Boolean, mediaChanged: Boolean, isAnime: Boolean = false): DiscoverFilters {
+        val sortAllowed = if (isAnime) {
+            sort in AnimeSortOptions
+        } else {
+            sort != DiscoverSort.Trending && !(isTv && sort == DiscoverSort.Revenue)
+        }
+        return copy(
             genreIds = if (mediaChanged) emptySet() else genreIds,
-            sort = if (isTv && sort == DiscoverSort.Revenue) DiscoverSort.Popular else sort,
+            sort = if (sortAllowed) sort else DiscoverSort.Popular,
+            // Anime browses single years (a season lives inside one year), so decades are dropped.
+            yearKey = if (isAnime && yearKey?.startsWith("d") == true) null else yearKey,
             networkId = if (isTv) networkId else null,
-            certification = if (isTv) null else certification,
+            certification = if (isTv || isAnime) null else certification,
+            animeFormat = if (isAnime) animeFormat else AnimeFormat.Tv,
+            animeSeason = if (isAnime) animeSeason else null,
+            animeStatus = if (isAnime && isTv) animeStatus else null,
         )
+    }
 }
+
+/** Effective TMDB media type of a TMDB discover catalog: anime follows its format filter, the rest follow the catalog type. */
+internal fun discoverIsTv(catalogType: String, filters: DiscoverFilters): Boolean =
+    if (catalogType == "anime") filters.animeFormat == AnimeFormat.Tv else catalogType != "movie"
+
+private val AnimeExcludedTvGenreIds = setOf(16, 99, 10763, 10764, 10766, 10767)
+private val AnimeExcludedMovieGenreIds = setOf(16, 99, 10770)
 
 data class DiscoverFilterOptions(
     val movieGenres: List<DiscoverTmdbGenre> = emptyList(),
@@ -112,4 +164,12 @@ data class DiscoverFilterOptions(
 ) {
     val isEmpty: Boolean
         get() = movieGenres.isEmpty() && tvGenres.isEmpty() && languages.isEmpty() && countries.isEmpty()
+
+    /** Anime genres: the TMDB genres of the chosen format without the redundant Animation genre or non-fiction genres. */
+    fun animeGenres(isTv: Boolean): List<DiscoverTmdbGenre> =
+        if (isTv) {
+            tvGenres.filterNot { it.id in AnimeExcludedTvGenreIds }
+        } else {
+            movieGenres.filterNot { it.id in AnimeExcludedMovieGenreIds }
+        }
 }

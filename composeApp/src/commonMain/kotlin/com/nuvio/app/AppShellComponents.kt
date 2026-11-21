@@ -95,6 +95,8 @@ internal data class AppTabActions(
     val onCloudFilePlay: ((CloudLibraryItem, CloudLibraryFile) -> Unit)? = null,
     val onConnectCloudClick: (() -> Unit)? = null,
     val onDownloadsClick: () -> Unit = {},
+    val onCalendarClick: (() -> Unit)? = null,
+    val onProviderClick: ((com.nuvio.app.features.providers.StreamingProvider) -> Unit)? = null,
     val onContinueWatchingClick: ((ContinueWatchingItem) -> Unit)? = null,
     val onContinueWatchingLongPress: ((ContinueWatchingItem) -> Unit)? = null,
     val onSwitchProfile: (() -> Unit)? = null,
@@ -145,6 +147,7 @@ internal fun AppTabHost(
                         continueWatchingDisintegrationRequest = state.continueWatchingDisintegrationRequest,
                         onFolderClick = actions.onFolderClick,
                         onFirstCatalogRendered = actions.onInitialHomeContentRendered,
+                        onProviderClick = actions.onProviderClick,
                     )
                 }
             }
@@ -191,6 +194,7 @@ internal fun AppTabHost(
                     onPreviewClick = actions.onPosterClick,
                     onPreviewLongClick = actions.onPosterLongClick,
                     onDownloadsClick = actions.onDownloadsClick,
+                    onCalendarClick = actions.onCalendarClick,
                     disintegrationRequest = state.libraryDisintegrationRequest,
                 )
             }

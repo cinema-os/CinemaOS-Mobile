@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Calendar -->
+    <string name="calendar_title">Calendar</string>
+    <string name="calendar_open">Open calendar</string>
+    <string name="calendar_prev_month">Previous month</string>
+    <string name="calendar_next_month">Next month</string>
+    <string name="calendar_today">Today</string>
+    <string name="calendar_refresh">Refresh</string>
+    <string name="calendar_switch_to_list">Switch to list view</string>
+    <string name="calendar_switch_to_grid">Switch to calendar view</string>
+    <string name="calendar_month_title">%1$s %2$d</string>
+    <string name="calendar_month_1">January</string>
+    <string name="calendar_month_2">February</string>
+    <string name="calendar_month_3">March</string>
+    <string name="calendar_month_4">April</string>
+    <string name="calendar_month_5">May</string>
+    <string name="calendar_month_6">June</string>
+    <string name="calendar_month_7">July</string>
+    <string name="calendar_month_8">August</string>
+    <string name="calendar_month_9">September</string>
+    <string name="calendar_month_10">October</string>
+    <string name="calendar_month_11">November</string>
+    <string name="calendar_month_12">December</string>
+    <string name="calendar_weekday_1">Mon</string>
+    <string name="calendar_weekday_2">Tue</string>
+    <string name="calendar_weekday_3">Wed</string>
+    <string name="calendar_weekday_4">Thu</string>
+    <string name="calendar_weekday_5">Fri</string>
+    <string name="calendar_weekday_6">Sat</string>
+    <string name="calendar_weekday_7">Sun</string>
+    <string name="calendar_day_header">%1$s · %2$s</string>
+    <string name="calendar_episode_single">S%1$d · E%2$d</string>
+    <string name="calendar_episode_range">S%1$d · E%2$d–E%3$d · %4$s</string>
+    <plurals name="calendar_episode_count">
+        <item quantity="one">%1$d episode</item>
+        <item quantity="other">%1$d episodes</item>
+    </plurals>
+    <string name="calendar_movie_release">Movie release</string>
+    <string name="calendar_nothing_on_day">Nothing airing on this day</string>
+    <string name="calendar_nothing_this_month">Nothing from your shows this month</string>
+    <string name="calendar_empty_sources">Add shows and movies to your library to see upcoming episodes and releases here.</string>
+    <string name="calendar_load_failed">Couldn't load the calendar</string>
+
+    <!-- Providers -->
+    <string name="providers_row_title">Providers</string>
+    <string name="providers_streaming_on">Streaming on</string>
+    <string name="providers_region">Region: %1$s</string>
+    <string name="providers_tab_movies">Movies</string>
+    <string name="providers_tab_series">Series</string>
+    <string name="providers_sort_popular">Popular</string>
+    <string name="providers_sort_top_rated">Top rated</string>
+    <string name="providers_sort_newest">Newest</string>
+    <string name="providers_empty_title">Nothing here yet</string>
+    <string name="providers_empty_message">Try the other tab or a different sort.</string>
+    <string name="providers_load_failed">Couldn't load titles from %1$s</string>
+</resources>

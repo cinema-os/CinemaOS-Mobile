@@ -7,18 +7,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import com.nuvio.app.features.calendar.CalendarScreen
 import com.nuvio.app.features.details.MetaDetailsScreen
 import com.nuvio.app.features.details.MovieCollectionScreen
 import com.nuvio.app.features.details.PersonDetailScreen
 import com.nuvio.app.features.details.TmdbEntityBrowseScreen
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.providers.ProviderScreen
 import com.nuvio.app.features.tmdb.TmdbEntityKind
 import com.nuvio.app.features.tmdb.TmdbService
+import com.nuvio.app.navigation.CalendarRoute
 import com.nuvio.app.navigation.DetailRoute
 import com.nuvio.app.navigation.EntityBrowseRoute
 import com.nuvio.app.navigation.MovieCollectionRoute
 import com.nuvio.app.navigation.NuvioNavigator
 import com.nuvio.app.navigation.PersonDetailRoute
+import com.nuvio.app.navigation.ProviderRoute
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.person_role_creator
@@ -184,6 +188,35 @@ internal fun MovieCollectionDestination(
     MovieCollectionScreen(
         collectionId = route.collectionId,
         collectionName = route.collectionName,
+        onBack = onBack,
+        onOpenMeta = rememberOpenMeta(navController),
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+@Composable
+internal fun CalendarDestination(
+    route: CalendarRoute,
+    navController: NuvioNavigator,
+) {
+    val onBack = rememberGuardedPopBackStack(navController, route)
+    CalendarScreen(
+        onBack = onBack,
+        onOpenMeta = rememberOpenMeta(navController),
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+@Composable
+internal fun ProviderDestination(
+    route: ProviderRoute,
+    navController: NuvioNavigator,
+) {
+    val onBack = rememberGuardedPopBackStack(navController, route)
+    ProviderScreen(
+        providerId = route.providerId,
+        providerName = route.providerName,
+        logoPath = route.logoPath,
         onBack = onBack,
         onOpenMeta = rememberOpenMeta(navController),
         modifier = Modifier.fillMaxSize(),

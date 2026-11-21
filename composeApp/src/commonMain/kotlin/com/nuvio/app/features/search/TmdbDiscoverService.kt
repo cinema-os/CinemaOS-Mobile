@@ -76,7 +76,7 @@ internal object TmdbDiscoverService {
         val dateField = if (isTv) "first_air_date" else "primary_release_date"
         val today = CurrentDateProvider.todayIsoDate()
         val sortBy = when (filters.sort) {
-            DiscoverSort.Popular, DiscoverSort.NowPlaying -> "popularity.desc"
+            DiscoverSort.Popular, DiscoverSort.NowPlaying, DiscoverSort.Trending -> "popularity.desc"
             DiscoverSort.Newest -> "$dateField.desc"
             DiscoverSort.Oldest, DiscoverSort.Upcoming -> "$dateField.asc"
             DiscoverSort.TopRated -> "vote_average.desc"
@@ -94,22 +94,30 @@ internal object TmdbDiscoverService {
             if (isAnime) put("with_keywords", ANIME_KEYWORD_ID)
 
             val year = filters.yearKey
-            when {
-                year == null -> Unit
-                year.startsWith("y") -> {
-                    val value = year.drop(1)
-                    put(if (isTv) "first_air_date_year" else "primary_release_year", value)
-                }
-                year.startsWith("d") -> {
-                    val start = year.drop(1).toIntOrNull()
-                    if (start != null) {
-                        put("$dateField.gte", "$start-01-01")
-                        put("$dateField.lte", "${start + 9}-12-31")
+            // Anime season: a broadcast season (e.g. Spring 2024) pins the first air / release date to that quarter.
+            val season = if (isAnime) filters.animeSeason else null
+            if (season != null) {
+                val seasonYear = year?.takeIf { it.startsWith("y") }?.drop(1)?.toIntOrNull() ?: currentYear(today)
+                put("$dateField.gte", isoDate(seasonYear, season.startMonth, 1))
+                put("$dateField.lte", isoDate(seasonYear, season.endMonth, season.endDay))
+            } else {
+                when {
+                    year == null -> Unit
+                    year.startsWith("y") -> {
+                        val value = year.drop(1)
+                        put(if (isTv) "first_air_date_year" else "primary_release_year", value)
+                    }
+                    year.startsWith("d") -> {
+                        val start = year.drop(1).toIntOrNull()
+                        if (start != null) {
+                            put("$dateField.gte", "$start-01-01")
+                            put("$dateField.lte", "${start + 9}-12-31")
+                        }
                     }
                 }
             }
-            // Sort-implied date windows; a year filter already pins the date range.
-            if (year == null) {
+            // Sort-implied date windows; a year or season filter already pins the date range.
+            if (year == null && season == null) {
                 when (filters.sort) {
                     DiscoverSort.Upcoming -> put("$dateField.gte", today)
                     DiscoverSort.NowPlaying -> {
@@ -117,6 +125,14 @@ internal object TmdbDiscoverService {
                         put("$dateField.lte", today)
                     }
                     DiscoverSort.Newest -> put("$dateField.lte", today)
+                    DiscoverSort.Trending -> if (isTv) {
+                        // Shows that aired an episode recently (includes long runners), most popular first.
+                        put("air_date.gte", shiftMonths(today, -1))
+                        put("air_date.lte", today)
+                    } else {
+                        put("$dateField.gte", shiftMonths(today, -6))
+                        put("$dateField.lte", today)
+                    }
                     else -> Unit
                 }
             }
@@ -137,6 +153,7 @@ internal object TmdbDiscoverService {
             }
             if (isTv) {
                 filters.networkId?.let { put("with_networks", it) }
+                if (isAnime) filters.animeStatus?.let { put("with_status", it.tmdbStatus) }
             } else {
                 filters.certification?.let {
                     put("certification_country", "US")
@@ -191,6 +208,11 @@ internal object TmdbDiscoverService {
 
     private fun String?.tmdbImage(size: String): String? =
         this?.takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/$size$it" }
+
+    private fun currentYear(todayIso: String): Int = todayIso.take(4).toIntOrNull() ?: 2025
+
+    private fun isoDate(year: Int, month: Int, day: Int): String =
+        "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
 
     /** Shifts an ISO date by whole months; the day is clamped to 28 to stay valid in every month. */
     private fun shiftMonths(isoDate: String, months: Int): String {
