@@ -37,6 +37,8 @@ internal fun LazyListScope.discoverContent(
     onTypeSelected: (String) -> Unit,
     onCatalogSelected: (String) -> Unit,
     onGenreSelected: (String?) -> Unit,
+    onFiltersChange: (((DiscoverFilters) -> DiscoverFilters) -> Unit)? = null,
+    onClearFilters: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     watchedKeys: Set<String> = emptySet(),
     fullyWatchedSeriesKeys: Set<String> = emptySet(),
@@ -55,7 +57,17 @@ internal fun LazyListScope.discoverContent(
             onGenreSelected = onGenreSelected,
         )
     }
-    state.selectedCatalog?.let { selectedCatalog ->
+    if (state.isTmdbSelected && onFiltersChange != null) {
+        item {
+            DiscoverTmdbFilters(
+                state = state,
+                onFiltersChange = onFiltersChange,
+                onClearAll = { onClearFilters?.invoke() },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
+    }
+    state.selectedCatalog?.takeIf { !it.isTmdb }?.let { selectedCatalog ->
         item {
             Text(
                 text = stringResource(
@@ -151,32 +163,39 @@ private fun DiscoverFilterRow(
         )
         NuvioDropdownChip(
             title = stringResource(Res.string.discover_select_catalog),
-            label = state.selectedCatalog?.catalogName ?: stringResource(Res.string.discover_catalog),
+            label = state.selectedCatalog?.let { it.displayCatalogName() } ?: stringResource(Res.string.discover_catalog),
             selectedKey = state.selectedCatalogKey,
-            options = state.catalogOptions.map { option -> NuvioDropdownOption(key = option.key, label = option.catalogName) },
+            options = state.catalogOptions.map { option -> NuvioDropdownOption(key = option.key, label = option.displayCatalogName()) },
             enabled = state.catalogOptions.isNotEmpty(),
             onSelected = { onCatalogSelected(it.key) },
         )
 
         val selectedCatalog = state.selectedCatalog
-        val genreOptions = buildList {
-            if (selectedCatalog?.genreRequired != true) {
-                add(NuvioDropdownOption(key = "", label = stringResource(Res.string.discover_all_genres)))
+        // TMDB catalogs bring their own multi-select genre filter, shown in the filter bar below.
+        if (selectedCatalog?.isTmdb != true) {
+            val genreOptions = buildList {
+                if (selectedCatalog?.genreRequired != true) {
+                    add(NuvioDropdownOption(key = "", label = stringResource(Res.string.discover_all_genres)))
+                }
+                addAll(state.genreOptions.map { genre -> NuvioDropdownOption(key = genre, label = genre) })
             }
-            addAll(state.genreOptions.map { genre -> NuvioDropdownOption(key = genre, label = genre) })
+            NuvioDropdownChip(
+                title = stringResource(Res.string.discover_select_genre),
+                label = state.selectedGenre ?: stringResource(Res.string.discover_all_genres),
+                selectedKey = state.selectedGenre ?: "",
+                options = genreOptions,
+                enabled = genreOptions.size > 1 || selectedCatalog?.genreRequired == true,
+                onSelected = { option ->
+                    onGenreSelected(option.key.ifBlank { null })
+                },
+            )
         }
-        NuvioDropdownChip(
-            title = stringResource(Res.string.discover_select_genre),
-            label = state.selectedGenre ?: stringResource(Res.string.discover_all_genres),
-            selectedKey = state.selectedGenre ?: "",
-            options = genreOptions,
-            enabled = genreOptions.size > 1 || selectedCatalog?.genreRequired == true,
-            onSelected = { option ->
-                onGenreSelected(option.key.ifBlank { null })
-            },
-        )
     }
 }
+
+@Composable
+private fun DiscoverCatalogOption.displayCatalogName(): String =
+    if (isTmdb) stringResource(Res.string.discover_tmdb_catalog) else catalogName
 
 @Composable
 private fun CatalogLoadingFooter(modifier: Modifier = Modifier) {

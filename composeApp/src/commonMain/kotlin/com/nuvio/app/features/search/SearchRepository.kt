@@ -72,6 +72,7 @@ object SearchRepository {
 
     private var activeJob: Job? = null
     private var activeDiscoverJob: Job? = null
+    private var filterOptionsJob: Job? = null
     private var lastRequestKey: String? = null
     private var discoverSources: List<DiscoverCatalogOption> = emptyList()
     private var lastDiscoverRequestKey: DiscoverRequestKey? = null
@@ -231,6 +232,7 @@ object SearchRepository {
     fun reset() {
         activeJob?.cancel()
         activeDiscoverJob?.cancel()
+        filterOptionsJob?.cancel()
         lastRequestKey = null
         discoverSources = emptyList()
         lastDiscoverRequestKey = null
@@ -264,7 +266,7 @@ object SearchRepository {
             return
         }
 
-        val sources = buildDiscoverSources(activeAddons) + serverLibraries.filter { it.library.kind != ServerMediaKind.MIXED }.map { ref ->
+        val sources = tmdbDiscoverSources() + buildDiscoverSources(activeAddons) + serverLibraries.filter { it.library.kind != ServerMediaKind.MIXED }.map { ref ->
             DiscoverCatalogOption(
                 key = ref.target.let { "server:${it.connectionId}:${it.libraryId}" },
                 addonName = ServerRepository.sourceLabel(ref.connection),
@@ -324,6 +326,8 @@ object SearchRepository {
             catalogOptions = catalogOptions,
             selectedCatalogKey = selectedCatalog.key,
             selectedGenre = selectedGenre,
+            filters = current.filters.forCatalogChange(old = current.selectedCatalog, new = selectedCatalog),
+            filterOptions = current.filterOptions,
             items = emptyList(),
             isLoading = false,
             nextSkip = null,
@@ -336,6 +340,7 @@ object SearchRepository {
                 "genre=${selectedGenre ?: "<all>"} sources=${sources.size}"
         }
 
+        ensureDiscoverFilterOptions(forceRefresh = forceRefresh)
         loadDiscoverFeed(
             reset = true,
             forceRefresh = forceRefresh,
@@ -366,7 +371,8 @@ object SearchRepository {
             selectedType = type,
             catalogOptions = catalogOptions,
             selectedCatalogKey = selectedCatalog.key,
-            selectedGenre = selectedCatalog.resolveGenreSelection(null),
+            selectedGenre = selectedCatalog.resolveGenreSelection(current.selectedGenre),
+            filters = current.filters.forCatalogChange(old = current.selectedCatalog, new = selectedCatalog),
             items = emptyList(),
             isLoading = false,
             nextSkip = null,
@@ -387,7 +393,8 @@ object SearchRepository {
         val selectedCatalog = current.catalogOptions.firstOrNull { it.key == catalogKey } ?: return
         _discoverUiState.value = current.copy(
             selectedCatalogKey = selectedCatalog.key,
-            selectedGenre = selectedCatalog.resolveGenreSelection(null),
+            selectedGenre = selectedCatalog.resolveGenreSelection(current.selectedGenre),
+            filters = current.filters.forCatalogChange(old = current.selectedCatalog, new = selectedCatalog),
             items = emptyList(),
             isLoading = false,
             nextSkip = null,
@@ -403,11 +410,22 @@ object SearchRepository {
 
     fun selectDiscoverGenre(genre: String?) {
         val current = _discoverUiState.value
-        val selectedCatalog = current.selectedCatalog ?: return
+        val currentCatalog = current.selectedCatalog ?: return
+        // The genre list is the union across the type's catalogs, so a genre picked while on a catalog without that
+        // genre (e.g. anime "Trending") moves to the first catalog of the type that supports it.
+        val selectedCatalog = if (genre != null && !currentCatalog.genreOptions.contains(genre)) {
+            current.catalogOptions.firstOrNull { !it.isTmdb && it.genreOptions.contains(genre) } ?: currentCatalog
+        } else {
+            currentCatalog
+        }
         val normalizedGenre = selectedCatalog.resolveGenreSelection(genre)
-        if (current.selectedGenre == normalizedGenre) return
+        if (current.selectedGenre == normalizedGenre && selectedCatalog.key == currentCatalog.key) return
 
+        if (selectedCatalog.key != currentCatalog.key) {
+            DiscoverSelectionStorage.saveCatalogKey(selectedCatalog.key)
+        }
         _discoverUiState.value = current.copy(
+            selectedCatalogKey = selectedCatalog.key,
             selectedGenre = normalizedGenre,
             items = emptyList(),
             isLoading = false,
@@ -419,6 +437,42 @@ object SearchRepository {
             reset = true,
             forceRefresh = false,
         )
+    }
+
+    fun updateDiscoverFilters(transform: (DiscoverFilters) -> DiscoverFilters) {
+        val current = _discoverUiState.value
+        val selectedCatalog = current.selectedCatalog ?: return
+        if (!selectedCatalog.isTmdb) return
+        val updated = transform(current.filters)
+            .sanitizedFor(isTv = selectedCatalog.type != "movie", mediaChanged = false)
+        if (updated == current.filters) return
+        _discoverUiState.value = current.copy(
+            filters = updated,
+            items = emptyList(),
+            isLoading = false,
+            nextSkip = null,
+            emptyStateReason = null,
+            errorMessage = null,
+        )
+        loadDiscoverFeed(
+            reset = true,
+            forceRefresh = false,
+        )
+    }
+
+    fun clearDiscoverFilters() {
+        updateDiscoverFilters { DiscoverFilters() }
+    }
+
+    private fun ensureDiscoverFilterOptions(forceRefresh: Boolean) {
+        if (discoverSources.none { it.isTmdb }) return
+        if (!forceRefresh && (!_discoverUiState.value.filterOptions.isEmpty || filterOptionsJob?.isActive == true)) return
+        filterOptionsJob?.cancel()
+        filterOptionsJob = scope.launch {
+            val options = runCatching { TmdbDiscoverService.loadFilterOptions() }.getOrNull() ?: return@launch
+            if (options.isEmpty) return@launch
+            _discoverUiState.value = _discoverUiState.value.copy(filterOptions = options)
+        }
     }
 
     fun loadMoreDiscover() {
@@ -468,7 +522,7 @@ object SearchRepository {
                         type = catalog.type,
                         catalogId = catalog.id,
                         catalogName = catalog.name,
-                        genreOptions = genreExtra?.options.orEmpty(),
+                        genreOptions = genreExtra?.options.orEmpty().filterNot { it.equals("Hentai", ignoreCase = true) },
                         genreRequired = genreExtra?.isRequired == true,
                         supportsPagination = catalog.supportsPagination(),
                     )
@@ -518,7 +572,7 @@ object SearchRepository {
         val current = _discoverUiState.value
         val selectedCatalog = current.selectedCatalog ?: return
         val requestedSkip = if (reset) 0 else current.nextSkip ?: return
-        val requestUrl = if (selectedCatalog.server != null) {
+        val requestUrl = if (selectedCatalog.server != null || selectedCatalog.isTmdb) {
             selectedCatalog.key
         } else {
             buildCatalogUrl(
@@ -549,7 +603,14 @@ object SearchRepository {
         activeDiscoverJob = scope.launch {
             runCatching {
                 val server = selectedCatalog.server
-                if (server != null) {
+                if (selectedCatalog.isTmdb) {
+                    TmdbDiscoverService.discover(
+                        isTv = selectedCatalog.type != "movie",
+                        isAnime = selectedCatalog.type == "anime",
+                        filters = current.filters,
+                        skip = requestedSkip,
+                    )
+                } else if (server != null) {
                     ServerCatalog.page(server, skip = requestedSkip)
                 } else {
                     fetchCatalogPage(
@@ -564,7 +625,9 @@ object SearchRepository {
             }.fold(
                 onSuccess = { page ->
                     val latest = _discoverUiState.value
-                    if (latest.selectedCatalogKey != selectedCatalog.key || latest.selectedGenre != current.selectedGenre) {
+                    if (latest.selectedCatalogKey != selectedCatalog.key || latest.selectedGenre != current.selectedGenre ||
+                        latest.filters != current.filters
+                    ) {
                         return@fold
                     }
                     val mergedItems = if (reset) {
@@ -612,7 +675,9 @@ object SearchRepository {
                     }
 
                     val latest = _discoverUiState.value
-                    if (latest.selectedCatalogKey != selectedCatalog.key || latest.selectedGenre != current.selectedGenre) {
+                    if (latest.selectedCatalogKey != selectedCatalog.key || latest.selectedGenre != current.selectedGenre ||
+                        latest.filters != current.filters
+                    ) {
                         return@fold
                     }
                     log.e(error) {
@@ -704,3 +769,28 @@ private fun String.typeSortKey(): String =
         "anime" -> "2_anime"
         else -> "9_$this"
     }
+
+/** Built-in TMDB discover sources (movies + series) that are driven by [DiscoverFilters] rather than addon extras. */
+private fun tmdbDiscoverSources(): List<DiscoverCatalogOption> =
+    listOf("movie", "series", "anime").map { type ->
+        DiscoverCatalogOption(
+            key = "tmdb:discover:$type",
+            addonName = "TMDB",
+            manifestUrl = "",
+            type = type,
+            catalogId = "tmdb-discover",
+            catalogName = "TMDB",
+            supportsPagination = true,
+            isTmdb = true,
+        )
+    }
+
+/** Keeps TMDB filters valid when the selected catalog changes (genre ids differ between movies and series). */
+private fun DiscoverFilters.forCatalogChange(
+    old: DiscoverCatalogOption?,
+    new: DiscoverCatalogOption,
+): DiscoverFilters {
+    if (!new.isTmdb) return this
+    val mediaChanged = old == null || !old.isTmdb || old.type != new.type
+    return sanitizedFor(isTv = new.type != "movie", mediaChanged = mediaChanged)
+}

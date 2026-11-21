@@ -314,6 +314,8 @@ fun SearchScreen(
                     onTypeSelected = SearchRepository::selectDiscoverType,
                     onCatalogSelected = SearchRepository::selectDiscoverCatalog,
                     onGenreSelected = SearchRepository::selectDiscoverGenre,
+                    onFiltersChange = SearchRepository::updateDiscoverFilters,
+                    onClearFilters = SearchRepository::clearDiscoverFilters,
                     onRetry = {
                         NetworkStatusRepository.requestRefresh(force = true)
                         if (addonsUiState.addons.firstEnabledManifestError() != null) {

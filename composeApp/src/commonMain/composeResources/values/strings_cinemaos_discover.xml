@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_tmdb_catalog">CinemaOS Discover</string>
+    <string name="discover_filter_genre">Genre</string>
+    <string name="discover_genres_count">Genres (%1$d)</string>
+    <string name="discover_filter_sort">Sort by</string>
+    <string name="discover_filter_year">Year</string>
+    <string name="discover_year_any">Any year</string>
+    <string name="discover_filter_rating">Rating</string>
+    <string name="discover_rating_any">Any rating</string>
+    <string name="discover_rating_min">%1$s+ rating</string>
+    <string name="discover_filter_runtime">Runtime</string>
+    <string name="discover_runtime_any">Any runtime</string>
+    <string name="discover_runtime_under_90">Under 90 min</string>
+    <string name="discover_runtime_90_120">90 to 120 min</string>
+    <string name="discover_runtime_120_150">120 to 150 min</string>
+    <string name="discover_runtime_over_150">Over 150 min</string>
+    <string name="discover_filter_language">Language</string>
+    <string name="discover_language_any">Any language</string>
+    <string name="discover_filter_country">Country</string>
+    <string name="discover_country_any">Any country</string>
+    <string name="discover_filter_provider">Streaming on</string>
+    <string name="discover_provider_any">Any service</string>
+    <string name="discover_filter_network">Network</string>
+    <string name="discover_network_any">Any network</string>
+    <string name="discover_filter_certification">Age rating</string>
+    <string name="discover_certification_any">Any age rating</string>
+    <string name="discover_sort_popular">Most popular</string>
+    <string name="discover_sort_newest">Newest first</string>
+    <string name="discover_sort_oldest">Oldest first</string>
+    <string name="discover_sort_top_rated">Highest rated</string>
+    <string name="discover_sort_most_voted">Most voted</string>
+    <string name="discover_sort_revenue">Highest grossing</string>
+    <string name="discover_sort_upcoming">Upcoming</string>
+    <string name="discover_sort_now_playing">Now playing</string>
+    <string name="discover_filters_clear_all">Clear all</string>
+    <string name="discover_filters_done">Done</string>
+    <string name="anime_genres_title">Browse by genre</string>
+</resources>

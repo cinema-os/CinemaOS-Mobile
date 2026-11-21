@@ -36,6 +36,8 @@ data class DiscoverCatalogOption(
     val genreRequired: Boolean = false,
     val supportsPagination: Boolean = false,
     val server: CatalogTarget.Server? = null,
+    /** True for the built-in TMDB discover source that is driven by [DiscoverFilters] instead of addon extras. */
+    val isTmdb: Boolean = false,
 )
 
 data class DiscoverUiState(
@@ -44,6 +46,8 @@ data class DiscoverUiState(
     val catalogOptions: List<DiscoverCatalogOption> = emptyList(),
     val selectedCatalogKey: String? = null,
     val selectedGenre: String? = null,
+    val filters: DiscoverFilters = DiscoverFilters(),
+    val filterOptions: DiscoverFilterOptions = DiscoverFilterOptions(),
     val items: List<MetaPreview> = emptyList(),
     val isLoading: Boolean = false,
     val nextSkip: Int? = null,
@@ -54,8 +58,19 @@ data class DiscoverUiState(
     val selectedCatalog: DiscoverCatalogOption?
         get() = catalogOptions.firstOrNull { it.key == selectedCatalogKey }
 
+    /**
+     * Genres offered for the selected type: the union across every catalog of that type, so a genre can be picked
+     * even when the currently selected catalog (e.g. "Trending") has no genre extra. Selecting one switches to a
+     * catalog that supports it.
+     */
     val genreOptions: List<String>
-        get() = selectedCatalog?.genreOptions.orEmpty()
+        get() = catalogOptions.filterNot { it.isTmdb }.flatMap { it.genreOptions }.distinct()
+
+    val isTmdbSelected: Boolean
+        get() = selectedCatalog?.isTmdb == true
+
+    val isTmdbTv: Boolean
+        get() = selectedCatalog?.let { it.isTmdb && it.type != "movie" } == true
 
     val canLoadMore: Boolean
         get() = nextSkip != null
