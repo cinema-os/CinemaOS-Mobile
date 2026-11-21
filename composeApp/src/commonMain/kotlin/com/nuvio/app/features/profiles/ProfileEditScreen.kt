@@ -2,8 +2,10 @@ package com.nuvio.app.features.profiles
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -70,7 +72,10 @@ fun ProfileEditScreen(
             profileState.profiles.find { it.profileIndex == snapshot.profileIndex } ?: snapshot
         }
     }
-    val fallbackColorHex = currentProfile?.avatarColorHex ?: PROFILE_COLORS.first()
+    var selectedColorHex by rememberSaveable {
+        mutableStateOf(currentProfile?.avatarColorHex ?: PROFILE_COLORS.first())
+    }
+    val fallbackColorHex = selectedColorHex
 
     var name by rememberSaveable { mutableStateOf(currentProfile?.name ?: "") }
     var selectedAvatarId by rememberSaveable { mutableStateOf(currentProfile?.avatarId) }
@@ -199,6 +204,27 @@ fun ProfileEditScreen(
                             },
                         )
                     }
+                }
+            }
+        }
+
+        item {
+            NuvioSurfaceCard {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(
+                        text = "Profile colour",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Used behind your initial when no avatar picture is selected.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    ProfileColorPicker(
+                        selectedHex = selectedColorHex,
+                        onSelected = { selectedColorHex = it },
+                    )
                 }
             }
         }
@@ -514,6 +540,39 @@ private fun ProfileIdentityCard(
     }
 }
 
+
+@Composable
+private fun ProfileColorPicker(
+    selectedHex: String,
+    onSelected: (String) -> Unit,
+) {
+    val spacing = 10.dp
+    val swatchSize = 40.dp
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val columns = ((maxWidth + spacing) / (swatchSize + spacing)).toInt().coerceAtLeast(1)
+        Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+            PROFILE_COLORS.chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                    row.forEach { hex ->
+                        val selected = hex.equals(selectedHex, ignoreCase = true)
+                        Box(
+                            modifier = Modifier
+                                .size(swatchSize)
+                                .clip(CircleShape)
+                                .background(parseHexColor(hex))
+                                .border(
+                                    width = if (selected) 3.dp else 0.dp,
+                                    color = if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                    shape = CircleShape,
+                                )
+                                .clickable { onSelected(hex) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun ProfileOptionRow(

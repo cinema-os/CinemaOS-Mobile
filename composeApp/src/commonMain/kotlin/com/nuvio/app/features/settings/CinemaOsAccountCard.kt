@@ -33,7 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 /**
- * cinemaos.tech account: shows signed-in state / sign out, or the device login (code + QR that the
+ * cinemaos.tech account: shows signed-in state (sign out lives on the Account page), or the device login (code + QR that the
  * user approves on cinemaos.tech/tv-login, or "Sign in on this phone" which opens the same page
  * with the code pre-filled in the browser while the app keeps polling).
  */
@@ -147,17 +147,11 @@ internal fun CinemaOsAccountCard() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(14.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                NuvioPrimaryButton(
-                    text = "Sync now",
-                    enabled = !isSyncing,
-                    onClick = { service.syncNow() },
-                )
-                NuvioPrimaryButton(
-                    text = "Sign out of CinemaOS",
-                    onClick = { service.signOut() },
-                )
-            }
+            NuvioPrimaryButton(
+                text = "Sync now",
+                enabled = !isSyncing,
+                onClick = { service.syncNow() },
+            )
         } else if (!flowActive) {
             Text(
                 text = "Sign in with your cinemaos.tech account to sync continue watching and your watchlist.",

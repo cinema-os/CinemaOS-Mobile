@@ -1,9 +1,12 @@
 package com.nuvio.app.features.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -29,14 +32,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.ui.NuvioPrimaryButton
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioSurfaceCard
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.features.cinemaos.CinemaOsAccount
+import com.nuvio.app.features.profiles.NuvioProfile
+import com.nuvio.app.features.profiles.ProfileAvatarView
+import com.nuvio.app.features.profiles.ProfileEditScreen
+import com.nuvio.app.features.profiles.ProfileRepository
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_cancel
@@ -76,8 +87,23 @@ private fun AccountSettingsBody(
     var deleteErrorMessage by remember { mutableStateOf<String?>(null) }
     val deleteAccountFallbackMessage = stringResource(Res.string.auth_account_deletion_failed)
     val canDeleteAccount = AppFeaturePolicy.accountDeletionEnabled && authState is AuthState.Authenticated
+    val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
+    val activeProfile = profileState.activeProfile ?: profileState.profiles.firstOrNull()
+    val cinemaOsSession by CinemaOsAccount.service.session.collectAsStateWithLifecycle()
+    var showProfileEditor by remember { mutableStateOf(false) }
+    val accountEmail = (authState as? AuthState.Authenticated)
+        ?.takeUnless { it.isAnonymous }
+        ?.email
+        ?: cinemaOsSession?.label
+    val isSignedInAnywhere = authState is AuthState.Authenticated || cinemaOsSession != null
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ProfileHeaderCard(
+            profile = activeProfile,
+            email = accountEmail,
+            onEditClick = { showProfileEditor = true },
+        )
+
         CinemaOsAccountCard()
 
         NuvioSurfaceCard {
@@ -128,7 +154,29 @@ private fun AccountSettingsBody(
             )
         }
 
-        SignOutButton(onClick = { showSignOutConfirm = true })
+        if (isSignedInAnywhere) {
+            SignOutButton(onClick = { showSignOutConfirm = true })
+        }
+    }
+
+    if (showProfileEditor) {
+        Dialog(
+            onDismissRequest = { showProfileEditor = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.nuvio.colors.background),
+            ) {
+                ProfileEditScreen(
+                    profile = activeProfile,
+                    onBack = { showProfileEditor = false },
+                    onSaved = { showProfileEditor = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
     }
 
     NuvioStatusModal(
@@ -139,6 +187,8 @@ private fun AccountSettingsBody(
         dismissText = stringResource(Res.string.action_cancel),
         onConfirm = {
             showSignOutConfirm = false
+            // One sign-out for everything: the cinemaos.tech website account and the app account.
+            CinemaOsAccount.service.signOut()
             scope.launch { AuthRepository.signOut() }
         },
         onDismiss = { showSignOutConfirm = false },
@@ -174,6 +224,51 @@ private fun AccountSettingsBody(
             }
         },
     )
+}
+
+@Composable
+private fun ProfileHeaderCard(
+    profile: NuvioProfile?,
+    email: String?,
+    onEditClick: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio
+    NuvioSurfaceCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ProfileAvatarView(profile = profile, size = 84.dp)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = profile?.name?.takeIf { it.isNotBlank() } ?: "Your profile",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = tokens.colors.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!email.isNullOrBlank()) {
+                    Text(
+                        text = email,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.colors.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        NuvioPrimaryButton(
+            text = if (profile == null) "Create profile" else "Edit profile",
+            onClick = onEditClick,
+        )
+    }
 }
 
 @Composable
