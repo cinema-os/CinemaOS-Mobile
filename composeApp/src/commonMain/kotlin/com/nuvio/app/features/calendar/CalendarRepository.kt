@@ -102,7 +102,7 @@ object CalendarRepository {
     private val monthCache = mutableMapOf<String, List<CalendarEntry>>()
     private val tmdbIdCache = mutableMapOf<String, Int?>()
     private val tvCache = mutableMapOf<Int, TmdbCalendarTv?>()
-    private val seasonCache = mutableMapOf<String, List<TmdbCalendarEpisode>>()
+    private val seasonCache = mutableMapOf<String, List<TmdbCalendarEpisode>?>()
     private val movieCache = mutableMapOf<Int, TmdbCalendarMovie?>()
 
     suspend fun clear() {
