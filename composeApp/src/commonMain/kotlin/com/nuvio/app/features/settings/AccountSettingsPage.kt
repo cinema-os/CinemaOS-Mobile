@@ -6,6 +6,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -28,7 +33,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.build.AppFeaturePolicy
-import com.nuvio.app.core.ui.NuvioPrimaryButton
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioSurfaceCard
 import com.nuvio.app.core.ui.NuvioTokens
@@ -114,11 +118,6 @@ private fun AccountSettingsBody(
             }
         }
 
-        NuvioPrimaryButton(
-            text = stringResource(Res.string.settings_account_sign_out),
-            onClick = { showSignOutConfirm = true },
-        )
-
         if (canDeleteAccount) {
             DeleteAccountCard(
                 errorMessage = deleteErrorMessage,
@@ -128,6 +127,8 @@ private fun AccountSettingsBody(
                 },
             )
         }
+
+        SignOutButton(onClick = { showSignOutConfirm = true })
     }
 
     NuvioStatusModal(
@@ -221,6 +222,34 @@ private fun DeleteAccountCard(
                 textAlign = TextAlign.Center,
             )
         }
+    }
+}
+
+@Composable
+private fun SignOutButton(onClick: () -> Unit) {
+    val tokens = MaterialTheme.nuvio
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(NuvioTokens.Space.s48 + NuvioTokens.Space.s4),
+        shape = tokens.shapes.button,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = tokens.colors.danger,
+            contentColor = tokens.colors.textInverse,
+        ),
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.Logout,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = stringResource(Res.string.settings_account_sign_out),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

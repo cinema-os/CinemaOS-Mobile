@@ -46,6 +46,7 @@ fun DetailPosterRailSection(
     sourceLabel: String? = null,
     onPosterClick: ((MetaPreview) -> Unit)? = null,
     onPosterLongClick: ((MetaPreview) -> Unit)? = null,
+    onViewAllClick: (() -> Unit)? = null,
 ) {
     if (items.isEmpty()) return
     val posterCardStyle = rememberPosterCardStyleUiState()
@@ -59,6 +60,7 @@ fun DetailPosterRailSection(
             title = if (showHeader) title else "",
             entries = items,
             headerHorizontalPadding = headerHorizontalPadding,
+            onViewAllClick = onViewAllClick,
             rowContentPadding = PaddingValues(
                 horizontal = headerHorizontalPadding + horizontalScrollPadding,
             ),

@@ -17,7 +17,9 @@ data class MetaPreview(
     val rawReleaseDate: String? = null,
     val popularity: Double? = null,
     val voteCount: Int? = null,
+    /** Real IMDb rating only. TMDB scores go in [tmdbRating]. */
     val imdbRating: String? = null,
+    val tmdbRating: String? = null,
     val genres: List<String> = emptyList(),
     val rawPosterUrl: String? = null,
     val landscapePoster: String? = null,

@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.features.details.ImdbRatingRepository
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaExternalRating
@@ -37,6 +38,8 @@ internal data class HomeHeroState(
 internal data class HomeHeroMeta(
     val details: MetaDetails? = null,
     val ratings: List<MetaExternalRating> = emptyList(),
+    /** Real IMDb rating resolved lazily from Cinemeta; null until (or unless) found. */
+    val imdbRating: String? = null,
 )
 
 internal object HomeHeroMetaRepository {
@@ -69,6 +72,10 @@ internal object HomeHeroMetaRepository {
                     .orEmpty()
                 update(key) { meta -> meta.copy(ratings = ratings) }
             }
+            launch {
+                val imdbRating = fetchImdbRating(item) { details.await() }
+                if (imdbRating != null) update(key) { meta -> meta.copy(imdbRating = imdbRating) }
+            }
             val resolved = details.await() ?: return@coroutineScope
             update(key) { meta -> meta.copy(details = resolved) }
         }
@@ -81,6 +88,21 @@ internal object HomeHeroMetaRepository {
     private suspend fun fetchDetails(item: MetaPreview): MetaDetails? =
         try {
             MetaDetailsRepository.fetch(type = item.type, id = item.id)
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            null
+        }
+
+    private suspend fun fetchImdbRating(
+        item: MetaPreview,
+        details: suspend () -> MetaDetails?,
+    ): String? =
+        try {
+            ImdbRatingRepository.fetch(
+                type = item.type,
+                id = item.id,
+                knownImdbId = details()?.imdbId,
+            )
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
             null
@@ -116,7 +138,10 @@ internal fun MetaPreview.withHeroMeta(meta: HomeHeroMeta): MetaPreview {
     val details = meta.details
     return copy(
         genres = details?.genres?.takeIf { it.isNotEmpty() } ?: genres,
-        imdbRating = details?.imdbRating?.takeIf { it.isNotBlank() } ?: imdbRating,
+        imdbRating = meta.imdbRating?.takeIf { it.isNotBlank() }
+            ?: details?.imdbRating?.takeIf { it.isNotBlank() }
+            ?: imdbRating,
+        tmdbRating = details?.tmdbRating?.takeIf { it.isNotBlank() } ?: tmdbRating,
         runtime = details?.runtime?.takeIf { it.isNotBlank() } ?: runtime,
         status = details?.status?.takeIf { it.isNotBlank() } ?: status,
         ageRating = details?.ageRating?.takeIf { it.isNotBlank() } ?: ageRating,

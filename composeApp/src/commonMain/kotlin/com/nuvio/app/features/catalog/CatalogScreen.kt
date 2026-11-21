@@ -295,7 +295,7 @@ private fun CatalogHeader(
 }
 
 @Composable
-private fun CatalogPosterTile(
+internal fun CatalogPosterTile(
     item: MetaPreview,
     cornerRadiusDp: Int,
     hideLabels: Boolean,
@@ -420,7 +420,7 @@ private fun PosterShape.catalogAspectRatio(): Float =
         PosterShape.Landscape -> 1.78f
     }
 
-private fun catalogGridColumnsForWidth(screenWidth: Dp): Int =
+internal fun catalogGridColumnsForWidth(screenWidth: Dp): Int =
     when {
         screenWidth >= 1400.dp -> 7
         screenWidth >= 1200.dp -> 6

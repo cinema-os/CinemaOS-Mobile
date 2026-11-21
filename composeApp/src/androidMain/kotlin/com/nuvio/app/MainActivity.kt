@@ -80,9 +80,15 @@ open class MainActivity : AppCompatActivity() {
         installSplashScreen()
         enableEdgeToEdge(
             navigationBarStyle = SystemBarStyle.dark(
-                scrim = 0xFF020404.toInt(),
+                scrim = android.graphics.Color.TRANSPARENT,
             ),
         )
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+            window.isStatusBarContrastEnforced = false
+        }
         ThemeSettingsStorage.initialize(applicationContext)
         AppIconPlatform.initialize(applicationContext)
         SentrySettingsStorage.initialize(applicationContext)

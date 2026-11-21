@@ -46,6 +46,7 @@ object TmdbMetadataService {
     private val episodeCache = mutableMapOf<String, Map<Pair<Int, Int>, TmdbEpisodeEnrichment>>()
     private val moreLikeThisCache = mutableMapOf<String, List<MetaPreview>>()
     private val collectionCache = mutableMapOf<String, Pair<String?, List<MetaPreview>>>()
+    private val collectionDetailCache = mutableMapOf<String, TmdbCollectionDetail>()
     private val trailerCache = mutableMapOf<String, List<MetaTrailer>>()
     private val personCache = mutableMapOf<String, PersonDetail>()
     private val entityBrowseCache = mutableMapOf<String, TmdbEntityBrowseData>()
@@ -784,7 +785,7 @@ object TmdbMetadataService {
             releaseInfo = enrichment.releaseInfo,
             lastAirDate = enrichment.lastAirDate,
             status = enrichment.status,
-            imdbRating = enrichment.rating?.formatRating(),
+            tmdbRating = enrichment.rating?.formatRating(),
             ageRating = enrichment.ageRating,
             runtime = enrichment.runtimeMinutes?.formatRuntime(),
             genres = enrichment.genres,
@@ -797,6 +798,7 @@ object TmdbMetadataService {
             language = enrichment.language,
             moreLikeThis = enrichment.moreLikeThis,
             moreLikeThisSource = MoreLikeThisSource.TMDB.takeIf { enrichment.moreLikeThis.isNotEmpty() },
+            collectionId = enrichment.collectionId,
             collectionName = enrichment.collectionName,
             collectionItems = enrichment.collectionItems,
             trailers = enrichment.trailers,
@@ -824,8 +826,7 @@ object TmdbMetadataService {
             updated = updated.copy(
                 name = enrichment.localizedTitle ?: updated.name,
                 description = enrichment.description ?: updated.description,
-                imdbRating = updated.imdbRating?.takeIf { it.isNotBlank() }
-                    ?: enrichment.rating?.formatRating(),
+                tmdbRating = enrichment.rating?.formatRating() ?: updated.tmdbRating,
                 genres = enrichment.genres.ifEmpty { updated.genres },
             )
         }
@@ -915,6 +916,7 @@ object TmdbMetadataService {
 
         if (enrichment != null && settings.useCollections) {
             updated = updated.copy(
+                collectionId = enrichment.collectionId,
                 collectionName = enrichment.collectionName,
                 collectionItems = enrichment.collectionItems,
             )
@@ -1071,6 +1073,7 @@ object TmdbMetadataService {
             language = details.originalLanguage?.trim()?.takeIf(String::isNotBlank),
             productionCompanies = details.productionCompanies.mapNotNull { it.toMetaCompany() },
             networks = details.networks.mapNotNull { it.toMetaCompany() },
+            collectionId = details.belongsToCollection?.id?.takeIf { it > 0 },
             collectionName = details.belongsToCollection?.name?.trim()?.takeIf(String::isNotBlank),
             collectionItems = if (settings.useCollections && details.belongsToCollection?.id != null) {
                 fetchCollection(
@@ -1247,7 +1250,7 @@ object TmdbMetadataService {
                     description = recommendation.overview?.trim()?.takeIf(String::isNotBlank),
                     releaseInfo = (recommendation.releaseDate ?: recommendation.firstAirDate)?.take(4),
                     rawReleaseDate = recommendation.releaseDate ?: recommendation.firstAirDate,
-                    imdbRating = recommendation.voteAverage?.formatRating(),
+                    tmdbRating = recommendation.voteAverage?.formatRating(),
                 )
             }
             .take(12)
@@ -1283,13 +1286,67 @@ object TmdbMetadataService {
                     description = part.overview?.trim()?.takeIf(String::isNotBlank),
                     releaseInfo = part.releaseDate?.take(4),
                     rawReleaseDate = part.releaseDate,
-                    imdbRating = part.voteAverage?.formatRating(),
+                    tmdbRating = part.voteAverage?.formatRating(),
                 )
             }
 
         val result = response.name?.trim()?.takeIf(String::isNotBlank) to items
         collectionCache[cacheKey] = result
         return result
+    }
+
+    /**
+     * Full movie-collection payload for the Collection page: name, overview, artwork and every part
+     * (poster cards) sorted by release date, oldest first; undated parts go last.
+     */
+    suspend fun fetchCollectionDetail(
+        collectionId: Int,
+        fallbackName: String? = null,
+    ): TmdbCollectionDetail? = withContext(Dispatchers.Default) {
+        val language = normalizeTmdbLanguage(TmdbSettingsRepository.snapshot().language)
+        val cacheKey = "$collectionId:$language:collectionDetail"
+        collectionDetailCache[cacheKey]?.let { return@withContext it }
+
+        val response = fetch<TmdbCollectionResponse>(
+            endpoint = "collection/$collectionId",
+            query = mapOf("language" to language),
+        ) ?: return@withContext null
+
+        val items = response.parts
+            .sortedWith(
+                compareBy<TmdbCollectionPart> { it.releaseDate.isNullOrBlank() }
+                    .thenBy { it.releaseDate.orEmpty() },
+            )
+            .mapNotNull { part ->
+                val title = part.title?.trim()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                MetaPreview(
+                    id = "tmdb:${part.id}",
+                    type = "movie",
+                    name = title,
+                    poster = buildImageUrl(part.posterPath, "w500")
+                        ?: buildImageUrl(part.backdropPath, "w780"),
+                    banner = buildImageUrl(part.backdropPath, "w1280"),
+                    posterShape = PosterShape.Poster,
+                    description = part.overview?.trim()?.takeIf(String::isNotBlank),
+                    releaseInfo = part.releaseDate?.take(4)?.takeIf(String::isNotBlank),
+                    rawReleaseDate = part.releaseDate?.takeIf(String::isNotBlank),
+                    tmdbRating = part.voteAverage?.takeIf { it > 0.0 }?.formatRating(),
+                )
+            }
+
+        val detail = TmdbCollectionDetail(
+            id = collectionId,
+            name = response.name?.trim()?.takeIf(String::isNotBlank)
+                ?: fallbackName?.trim()?.takeIf(String::isNotBlank)
+                ?: "",
+            overview = response.overview?.trim()?.takeIf(String::isNotBlank),
+            backdrop = buildImageUrl(response.backdropPath, "w1280"),
+            poster = buildImageUrl(response.posterPath, "w500"),
+            items = items,
+        )
+        if (detail.items.isEmpty()) return@withContext null
+        collectionDetailCache[cacheKey] = detail
+        detail
     }
 
     private suspend fun fetchTrailers(
@@ -1437,6 +1494,7 @@ internal data class TmdbEnrichment(
     val language: String?,
     val productionCompanies: List<MetaCompany>,
     val networks: List<MetaCompany>,
+    val collectionId: Int? = null,
     val collectionName: String? = null,
     val collectionItems: List<MetaPreview> = emptyList(),
     val moreLikeThis: List<MetaPreview> = emptyList(),
@@ -2073,6 +2131,9 @@ private data class TmdbRecommendationItem(
 @Serializable
 private data class TmdbCollectionResponse(
     val name: String? = null,
+    val overview: String? = null,
+    @SerialName("poster_path") val posterPath: String? = null,
+    @SerialName("backdrop_path") val backdropPath: String? = null,
     val parts: List<TmdbCollectionPart> = emptyList(),
 )
 
@@ -2211,6 +2272,15 @@ data class TmdbEntityRail(
 data class TmdbEntityBrowseData(
     val header: TmdbEntityHeader,
     val rails: List<TmdbEntityRail>,
+)
+
+data class TmdbCollectionDetail(
+    val id: Int,
+    val name: String,
+    val overview: String?,
+    val backdrop: String?,
+    val poster: String?,
+    val items: List<MetaPreview>,
 )
 
 data class TmdbEntityRailPageResult(

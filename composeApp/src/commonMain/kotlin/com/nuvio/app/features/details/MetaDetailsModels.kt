@@ -16,7 +16,10 @@ data class MetaDetails(
     /** TV: ISO last air date from TMDB (or addon) for year-range display. */
     val lastAirDate: String? = null,
     val status: String? = null,
+    /** Real IMDb rating only (Cinemeta / addon). TMDB scores go in [tmdbRating]. */
     val imdbRating: String? = null,
+    /** TMDB vote_average; shown with a TMDB label, never as IMDb. */
+    val tmdbRating: String? = null,
     val ageRating: String? = null,
     val runtime: String? = null,
     val externalRatings: List<MetaExternalRating> = emptyList(),
@@ -34,6 +37,8 @@ data class MetaDetails(
     val defaultVideoId: String? = null,
     val moreLikeThis: List<MetaPreview> = emptyList(),
     val moreLikeThisSource: MoreLikeThisSource? = null,
+    /** TMDB collection id, used to open the full Collection page. */
+    val collectionId: Int? = null,
     val collectionName: String? = null,
     val collectionItems: List<MetaPreview> = emptyList(),
     val trailers: List<MetaTrailer> = emptyList(),

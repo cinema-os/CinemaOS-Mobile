@@ -373,7 +373,7 @@ object TmdbCollectionSourceResolver {
         when (sortBy) {
             TmdbCollectionSort.ORIGINAL.value -> this
             TmdbCollectionSort.VOTE_AVERAGE_DESC.value -> sortedWith(
-                compareByDescending<MetaPreview> { it.imdbRating?.toDoubleOrNull() ?: -1.0 }
+                compareByDescending<MetaPreview> { (it.tmdbRating ?: it.imdbRating)?.toDoubleOrNull() ?: -1.0 }
                     .thenByDescending { it.rawReleaseDate ?: it.releaseInfo.orEmpty() },
             )
             TmdbCollectionSort.VOTE_COUNT_DESC.value -> sortedByDescending { it.voteCount ?: 0 }
@@ -415,7 +415,7 @@ object TmdbCollectionSourceResolver {
             },
             popularity = popularity,
             voteCount = voteCount,
-            imdbRating = voteAverage?.let { ((it * 10).roundToInt() / 10.0).toString() },
+            tmdbRating = voteAverage?.let { ((it * 10).roundToInt() / 10.0).toString() },
         )
     }
 
@@ -433,7 +433,7 @@ object TmdbCollectionSourceResolver {
             rawReleaseDate = releaseDate,
             popularity = popularity,
             voteCount = voteCount,
-            imdbRating = voteAverage?.let { ((it * 10).roundToInt() / 10.0).toString() },
+            tmdbRating = voteAverage?.let { ((it * 10).roundToInt() / 10.0).toString() },
         )
     }
 
@@ -462,7 +462,7 @@ object TmdbCollectionSourceResolver {
             },
             popularity = popularity,
             voteCount = voteCount,
-            imdbRating = voteAverage?.let { ((it * 10).roundToInt() / 10.0).toString() },
+            tmdbRating = voteAverage?.let { ((it * 10).roundToInt() / 10.0).toString() },
         )
     }
 
@@ -491,7 +491,7 @@ object TmdbCollectionSourceResolver {
             },
             popularity = popularity,
             voteCount = voteCount,
-            imdbRating = voteAverage?.let { ((it * 10).roundToInt() / 10.0).toString() },
+            tmdbRating = voteAverage?.let { ((it * 10).roundToInt() / 10.0).toString() },
         )
     }
 

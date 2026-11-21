@@ -192,6 +192,7 @@ fun MetaDetailsScreen(
     onOpenMeta: ((MetaPreview) -> Unit)? = null,
     onCastClick: ((MetaPerson, String?) -> Unit)? = null,
     onCompanyClick: ((MetaCompany, String) -> Unit)? = null,
+    onCollectionClick: ((collectionId: Int, collectionName: String) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     modifier: Modifier = Modifier,
@@ -1317,6 +1318,7 @@ fun MetaDetailsScreen(
                                         onOpenMeta = onOpenMeta,
                                         onCastClick = onCastClick,
                                         onCompanyClick = onCompanyClick,
+                                        onCollectionClick = onCollectionClick,
                                         sharedTransitionScope = sharedTransitionScope,
                                         animatedVisibilityScope = animatedVisibilityScope,
                                     )
@@ -1969,6 +1971,7 @@ private fun MetaDetails.toMetaPreview(): MetaPreview =
         description = description,
         releaseInfo = releaseInfo,
         imdbRating = imdbRating,
+        tmdbRating = tmdbRating,
         genres = genres,
     )
 
@@ -2025,6 +2028,7 @@ private fun LazyListScope.configuredMetaSectionItems(
     onOpenMeta: ((MetaPreview) -> Unit)?,
     onCastClick: ((MetaPerson, String?) -> Unit)?,
     onCompanyClick: ((MetaCompany, String) -> Unit)?,
+    onCollectionClick: ((collectionId: Int, collectionName: String) -> Unit)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
 ) {
@@ -2106,6 +2110,7 @@ private fun LazyListScope.configuredMetaSectionItems(
                     onOpenMeta = onOpenMeta,
                     onCastClick = onCastClick,
                     onCompanyClick = onCompanyClick,
+                    onCollectionClick = onCollectionClick,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                 )
@@ -2335,6 +2340,7 @@ private fun ConfiguredMetaSections(
     onOpenMeta: ((MetaPreview) -> Unit)?,
     onCastClick: ((MetaPerson, String?) -> Unit)?,
     onCompanyClick: ((MetaCompany, String) -> Unit)?,
+    onCollectionClick: ((collectionId: Int, collectionName: String) -> Unit)?,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
 ) {
@@ -2459,6 +2465,11 @@ private fun ConfiguredMetaSections(
                         showHeader = showHeader,
                         horizontalScrollPadding = horizontalScrollPadding,
                         onPosterClick = onOpenMeta,
+                        onViewAllClick = meta.collectionId
+                            ?.takeIf { onCollectionClick != null }
+                            ?.let { collectionId ->
+                                { onCollectionClick?.invoke(collectionId, meta.collectionName.orEmpty()) }
+                            },
                     )
                 }
             }

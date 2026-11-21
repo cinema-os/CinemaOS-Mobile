@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.nuvio.app.features.details.MetaDetailsScreen
+import com.nuvio.app.features.details.MovieCollectionScreen
 import com.nuvio.app.features.details.PersonDetailScreen
 import com.nuvio.app.features.details.TmdbEntityBrowseScreen
 import com.nuvio.app.features.home.MetaPreview
@@ -15,6 +16,7 @@ import com.nuvio.app.features.tmdb.TmdbEntityKind
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.navigation.DetailRoute
 import com.nuvio.app.navigation.EntityBrowseRoute
+import com.nuvio.app.navigation.MovieCollectionRoute
 import com.nuvio.app.navigation.NuvioNavigator
 import com.nuvio.app.navigation.PersonDetailRoute
 import kotlinx.coroutines.launch
@@ -119,6 +121,14 @@ internal fun DetailsDestination(
                 )
             }
         },
+        onCollectionClick = { collectionId, collectionName ->
+            navController.navigate(
+                MovieCollectionRoute(
+                    collectionId = collectionId,
+                    collectionName = collectionName,
+                ),
+            )
+        },
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
         modifier = Modifier.fillMaxSize(),
@@ -159,6 +169,21 @@ internal fun EntityDestination(
         entityId = route.entityId,
         entityName = route.entityName,
         sourceType = route.sourceType,
+        onBack = onBack,
+        onOpenMeta = rememberOpenMeta(navController),
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+@Composable
+internal fun MovieCollectionDestination(
+    route: MovieCollectionRoute,
+    navController: NuvioNavigator,
+) {
+    val onBack = rememberGuardedPopBackStack(navController, route)
+    MovieCollectionScreen(
+        collectionId = route.collectionId,
+        collectionName = route.collectionName,
         onBack = onBack,
         onOpenMeta = rememberOpenMeta(navController),
         modifier = Modifier.fillMaxSize(),

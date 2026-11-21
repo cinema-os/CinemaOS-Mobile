@@ -185,7 +185,7 @@ internal object TmdbDiscoverService {
             rawReleaseDate = date?.takeIf { it.isNotBlank() },
             popularity = popularity,
             voteCount = voteCount,
-            imdbRating = voteAverage?.takeIf { it > 0.0 }?.let { ((it * 10).roundToInt() / 10.0).toString() },
+            tmdbRating = voteAverage?.takeIf { it > 0.0 }?.let { ((it * 10).roundToInt() / 10.0).toString() },
         )
     }
 

@@ -63,6 +63,16 @@ data class EntityBrowseRoute(
         get() = entityName
 }
 
+/** Full page for a TMDB movie collection (franchise), opened from a movie's collection row. */
+@Serializable
+data class MovieCollectionRoute(
+    val collectionId: Int,
+    val collectionName: String,
+) : AppRoute {
+    override val title: String
+        get() = collectionName
+}
+
 /** A settings leaf promoted from the former in-screen page state machine. */
 @Serializable
 data class SettingsPageRoute(

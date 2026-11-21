@@ -435,11 +435,7 @@ private fun TabletHeroMetaRow(meta: MetaDetails, showImdbRating: Boolean) {
         if (seasonCount > 0) add(pluralStringResource(Res.plurals.details_season_count, seasonCount, seasonCount))
         formatRuntimeForDisplay(meta.runtime)?.let(::add)
     }
-    val validImdbRating = meta.imdbRating
-        ?.takeIf { showImdbRating }
-        ?.toDoubleOrNull()
-        ?.takeIf { it > 0.0 }
-        ?.let(::formatOneDecimal)
+    val overallRating = rememberOverallRating(meta = meta, enabled = showImdbRating)
     val ratingMedia = remember(meta) { meta.ratingReference() }
     val ratingState by rememberRatingState(ratingMedia)
     val itemStyle = MaterialTheme.typography.titleSmall.copy(
@@ -463,16 +459,12 @@ private fun TabletHeroMetaRow(meta: MetaDetails, showImdbRating: Boolean) {
         meta.ageRating?.takeIf { it.isNotBlank() }?.let { rating ->
             DetailHeroMetaBadge(text = rating)
         }
-        if (validImdbRating != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ImdbRatingSourceLabel(storeTextStyle = itemStyle)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = validImdbRating,
-                    style = itemStyle,
-                    color = ImdbYellow,
-                )
-            }
+        if (overallRating != null) {
+            OverallRatingBadge(
+                rating = overallRating,
+                textStyle = itemStyle,
+                spacing = 4.dp,
+            )
         }
         if (ratingState.isAvailable) {
             DetailRating(

@@ -22,10 +22,10 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.i18n.localizedMediaStatusLabel
 import com.nuvio.app.features.details.components.DetailHeroMetaBadge
-import com.nuvio.app.features.details.components.ImdbRatingSourceLabel
-import com.nuvio.app.features.details.components.ImdbYellow
+import com.nuvio.app.features.details.components.OverallRating
+import com.nuvio.app.features.details.components.OverallRatingBadge
 import com.nuvio.app.features.details.components.RatingsRow
-import com.nuvio.app.features.details.components.formatOneDecimal
+import com.nuvio.app.features.details.components.resolveOverallRating
 import com.nuvio.app.features.details.formatRuntimeForDisplay
 import com.nuvio.app.features.home.MetaPreview
 import nuvio.composeapp.generated.resources.Res
@@ -57,13 +57,13 @@ internal fun HomeHeroMetaRows(
     val badges = listOfNotNull(item.ageRating?.trim()?.takeIf { it.isNotBlank() }, status)
     val language = item.language?.trim()?.takeIf { it.isNotBlank() }?.uppercase()
     val ratings = if (showMdbListRatings) item.externalRatings else emptyList()
-    val imdbRating = item.imdbRating?.trim()
-        ?.takeIf { showImdbRating && ratings.isEmpty() }
-        ?.toDoubleOrNull()
-        ?.takeIf { it > 0.0 }
-        ?.let(::formatOneDecimal)
-    val primaryImdbRating = imdbRating?.takeIf { !isSeries && badges.isEmpty() }
-    val secondaryImdbRating = imdbRating?.takeIf { primaryImdbRating == null }
+    val overallRating = if (showImdbRating && ratings.isEmpty()) {
+        resolveOverallRating(imdbRating = item.imdbRating, tmdbRating = item.tmdbRating)
+    } else {
+        null
+    }
+    val primaryImdbRating = overallRating?.takeIf { !isSeries && badges.isEmpty() }
+    val secondaryImdbRating = overallRating?.takeIf { primaryImdbRating == null }
     val horizontalAlignment = if (isTablet) Alignment.Start else Alignment.CenterHorizontally
     val rowArrangement = Arrangement.spacedBy(8.dp, horizontalAlignment)
 
@@ -92,7 +92,7 @@ internal fun HomeHeroMetaRows(
             }
             primaryImdbRating?.let {
                 HeroMetaDot()
-                HeroImdbRating(rating = it)
+                HeroOverallRating(rating = it)
             }
         }
 
@@ -111,7 +111,7 @@ internal fun HomeHeroMetaRows(
                 }
                 secondaryImdbRating?.let {
                     if (badges.isNotEmpty()) HeroMetaDot()
-                    HeroImdbRating(rating = it)
+                    HeroOverallRating(rating = it)
                 }
                 language?.let {
                     if (badges.isNotEmpty() || secondaryImdbRating != null) HeroMetaDot()
@@ -130,18 +130,14 @@ internal fun HomeHeroMetaRows(
 }
 
 @Composable
-private fun HeroImdbRating(rating: String) {
+private fun HeroOverallRating(rating: OverallRating) {
     val textStyle = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        ImdbRatingSourceLabel(storeTextStyle = textStyle)
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = rating,
-            style = textStyle,
-            color = ImdbYellow,
-            maxLines = 1,
-        )
-    }
+    OverallRatingBadge(
+        rating = rating,
+        textStyle = textStyle,
+        spacing = 5.dp,
+        maxLines = 1,
+    )
 }
 
 @Composable

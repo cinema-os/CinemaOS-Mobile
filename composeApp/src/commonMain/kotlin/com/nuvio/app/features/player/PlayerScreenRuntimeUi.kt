@@ -331,7 +331,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
                 visible = introVisible,
                 logoUrl = nowPlayingLogo,
                 metaLine = metaUiState.meta?.let { playbackTitleMetaLine(it.releaseInfo, it.genres, it.runtime) }.orEmpty(),
-                rating = metaUiState.meta?.imdbRating,
+                rating = metaUiState.meta?.let { it.imdbRating ?: it.tmdbRating },
                 modifier = Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 44.dp),
             )
             // One owner for playback loading, independent of visible, hidden, locked or folded controls.

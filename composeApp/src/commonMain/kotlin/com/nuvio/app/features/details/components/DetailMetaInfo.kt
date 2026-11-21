@@ -28,8 +28,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.ui.nuvioHorizontalScrollBleed
+import com.nuvio.app.features.details.ImdbRatingRepository
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaExternalRating
 import com.nuvio.app.features.details.formatRuntimeForDisplay
@@ -88,17 +92,16 @@ fun DetailMetaInfo(
         val releaseLine = formatMetaReleaseLineForDetails(meta)
         val runtimeText = formatRuntimeForDisplay(meta.runtime)
         val ageBadge = meta.ageRating?.trim()?.takeIf { it.isNotBlank() }
-        val validImdbRating = meta.imdbRating
-            ?.takeIf { showOverallRatings && !isMdbListActive }
-            ?.toDoubleOrNull()
-            ?.takeIf { it > 0.0 }
-            ?.let(::formatOneDecimal)
+        val overallRating = rememberOverallRating(
+            meta = meta,
+            enabled = showOverallRatings && !isMdbListActive,
+        )
         val ratingMedia = remember(meta) { meta.ratingReference() }
         val ratingState by rememberRatingState(ratingMedia)
         val hasMetaRow = releaseLine != null ||
             runtimeText != null ||
             ageBadge != null ||
-            validImdbRating != null ||
+            overallRating != null ||
             ratingState.isAvailable
         if (hasMetaRow) {
             FlowRow(
@@ -125,22 +128,16 @@ fun DetailMetaInfo(
                 ageBadge?.let { badge ->
                     DetailHeroMetaBadge(text = badge)
                 }
-                if (validImdbRating != null) {
-                    val imdbTextStyle = MaterialTheme.typography.titleMedium.copy(
+                if (overallRating != null) {
+                    val ratingTextStyle = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.sp,
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ImdbRatingSourceLabel(storeTextStyle = imdbTextStyle)
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = validImdbRating,
-                            style = imdbTextStyle,
-                            color = ImdbYellow,
-                        )
-                    }
+                    OverallRatingBadge(
+                        rating = overallRating,
+                        textStyle = ratingTextStyle,
+                        spacing = 5.dp,
+                    )
                 }
                 if (ratingState.isAvailable) {
                     DetailRating(
@@ -255,6 +252,80 @@ internal fun RatingsRow(
     }
 }
 
+/** A single overall score and where it came from. IMDb is only used for a real IMDb value. */
+internal data class OverallRating(
+    val value: String,
+    val isImdb: Boolean,
+)
+
+/**
+ * Picks the overall rating to show: the real IMDb score when known, otherwise TMDB's score
+ * labelled as TMDB. TMDB's vote_average is never presented as IMDb.
+ */
+internal fun resolveOverallRating(imdbRating: String?, tmdbRating: String?): OverallRating? {
+    fun String?.positiveOneDecimal(): String? =
+        this?.trim()?.toDoubleOrNull()?.takeIf { it > 0.0 }?.let(::formatOneDecimal)
+
+    imdbRating.positiveOneDecimal()?.let { return OverallRating(it, isImdb = true) }
+    tmdbRating.positiveOneDecimal()?.let { return OverallRating(it, isImdb = false) }
+    return null
+}
+
+/**
+ * Resolves the overall rating for a details screen. When the meta has no IMDb value yet, the real
+ * one is fetched lazily from Cinemeta (cached in [ImdbRatingRepository]); until it arrives, or if
+ * none exists, TMDB's score is shown with a TMDB label.
+ */
+@Composable
+internal fun rememberOverallRating(meta: MetaDetails, enabled: Boolean): OverallRating? {
+    val hasImdb = !meta.imdbRating.isNullOrBlank()
+    var fetched by remember(meta.type, meta.id, meta.imdbId) {
+        mutableStateOf(ImdbRatingRepository.peek(meta.imdbId ?: meta.id))
+    }
+    LaunchedEffect(enabled, hasImdb, meta.type, meta.id, meta.imdbId) {
+        if (enabled && !hasImdb && fetched == null) {
+            fetched = ImdbRatingRepository.fetch(type = meta.type, id = meta.id, knownImdbId = meta.imdbId)
+        }
+    }
+    if (!enabled) return null
+    return resolveOverallRating(
+        imdbRating = meta.imdbRating?.takeIf { it.isNotBlank() } ?: fetched,
+        tmdbRating = meta.tmdbRating,
+    )
+}
+
+@Composable
+internal fun OverallRatingBadge(
+    rating: OverallRating,
+    textStyle: TextStyle,
+    spacing: Dp,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (rating.isImdb) {
+            ImdbRatingSourceLabel(storeTextStyle = textStyle)
+        } else {
+            TmdbRatingSourceLabel()
+        }
+        Spacer(modifier = Modifier.width(spacing))
+        Text(
+            text = rating.value,
+            style = textStyle,
+            color = if (rating.isImdb) ImdbYellow else TmdbBlue,
+            maxLines = maxLines,
+        )
+    }
+}
+
+@Composable
+internal fun TmdbRatingSourceLabel() {
+    Image(
+        painter = painterResource(Res.drawable.rating_tmdb),
+        contentDescription = stringResource(Res.string.source_tmdb),
+        modifier = Modifier.size(width = 16.dp, height = 16.dp),
+    )
+}
+
 @Composable
 internal fun ImdbRatingSourceLabel(storeTextStyle: TextStyle) {
     if (AppFeaturePolicy.imdbRatingLogoEnabled) {
@@ -338,6 +409,7 @@ private fun MetaBadgeText(
 }
 
 internal val ImdbYellow = Color(0xFFF5C518)
+internal val TmdbBlue = Color(0xFF01B4E4)
 
 private data class RatingVisuals(
     val source: String,
