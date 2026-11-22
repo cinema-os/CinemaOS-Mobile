@@ -128,7 +128,7 @@ fun ProviderScreen(
                     sort = ProviderSort.entries.firstOrNull { it.name == key.second } ?: ProviderSort.Popular,
                     page = current.nextPage,
                     region = region,
-                ).let { page -> page.copy(items = ProviderTitleLogos.fill(page.items)) }
+                )
             }
             // Drop the result if the tab or sort changed while it was loading.
             if (key != Triple(isTv, sortName, reloadToken)) return@launch
@@ -220,7 +220,6 @@ fun ProviderScreen(
                             item = item,
                             fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
                         ),
-                        showTitleLogo = true,
                         onClick = { onOpenMeta(item) },
                     )
                 }
