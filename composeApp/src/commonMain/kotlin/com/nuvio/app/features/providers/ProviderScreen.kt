@@ -39,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -161,6 +163,7 @@ fun ProviderScreen(
     }
 
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val brandColor = providerBrand(providerId).color
 
     Box(
         modifier = modifier
@@ -173,8 +176,8 @@ fun ProviderScreen(
                 .height(280.dp)
                 .background(
                     Brush.verticalGradient(
-                        0f to MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                        1f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                        0f to brandColor.copy(alpha = 0.35f),
+                        1f to brandColor.copy(alpha = 0f),
                     ),
                 ),
         )
@@ -284,7 +287,8 @@ private fun ProviderHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            ProviderLogo(provider = provider, size = 68.dp)
+            // Same brand tile as the Home row (gradient + wordmark, no grey container), 16:9.
+            ProviderLogo(provider = provider, modifier = Modifier.size(width = 128.dp, height = 72.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(Res.string.providers_streaming_on).uppercase(),
@@ -310,7 +314,7 @@ private fun ProviderHeader(
             }
         }
 
-        ProviderTabs(isTv = isTv, onTabChange = onTabChange)
+        ProviderTabs(isTv = isTv, brandColor = providerBrand(provider.id).color, onTabChange = onTabChange)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ProviderSort.entries.forEach { option ->
@@ -333,13 +337,14 @@ private fun ProviderHeader(
 @Composable
 private fun ProviderTabs(
     isTv: Boolean,
+    brandColor: Color,
     onTabChange: (Boolean) -> Unit,
 ) {
     val shape = RoundedCornerShape(50)
     Row(
         modifier = Modifier
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(brandColor.copy(alpha = 0.28f))
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -349,7 +354,7 @@ private fun ProviderTabs(
                 modifier = Modifier
                     .clip(shape)
                     .background(
-                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        if (selected) lerp(brandColor, Color.White, 0.22f) else Color.Transparent,
                     )
                     .clickable { onTabChange(tv) }
                     .padding(horizontal = 18.dp, vertical = 8.dp),
@@ -359,11 +364,7 @@ private fun ProviderTabs(
                     text = stringResource(label),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = if (selected) Color.White else Color.White.copy(alpha = 0.75f),
                 )
             }
         }

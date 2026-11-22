@@ -1,5 +1,6 @@
 package com.nuvio.app.features.providers
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.addons.httpGetText
@@ -29,6 +30,41 @@ data class StreamingProvider(
     val logoUrl: String?
         get() = logoPath?.takeIf { it.isNotBlank() }?.let { "$TMDB_IMAGE_BASE/w185$it" }
 }
+
+/**
+ * Tile look for one service: [color] is the gradient's brand colour, [wordmarkUrl] a rectangular
+ * wordmark (Wikimedia Commons PNG render of the official SVG/PNG, 500px), and [tintWhite] draws it
+ * white when the original logo is dark or the brand's own colour.
+ */
+data class ProviderBrand(
+    val color: Color,
+    val wordmarkUrl: String,
+    val tintWhite: Boolean,
+)
+
+private const val COMMONS_THUMB = "https://upload.wikimedia.org/wikipedia/commons/thumb/"
+
+private fun brand(r: Int, g: Int, b: Int, path: String, tintWhite: Boolean) =
+    ProviderBrand(Color(r, g, b), COMMONS_THUMB + path, tintWhite)
+
+/** Brand colour + wordmark per TMDB provider id (same table as the TV app). */
+private val ProviderBrands: Map<Int, ProviderBrand> = mapOf(
+    8 to brand(184, 29, 36, "0/08/Netflix_2015_logo.svg/500px-Netflix_2015_logo.svg.png", tintWhite = true),
+    9 to brand(15, 61, 92, "9/90/Prime_Video_logo_(2024).svg/500px-Prime_Video_logo_(2024).svg.png", tintWhite = true),
+    337 to brand(26, 77, 184, "7/77/Disney_Plus_logo.svg/500px-Disney_Plus_logo.svg.png", tintWhite = false),
+    1899 to brand(74, 26, 120, "7/7e/HBO_Max_May_2025_(Horizontal).svg/500px-HBO_Max_May_2025_(Horizontal).svg.png", tintWhite = true),
+    350 to brand(28, 28, 30, "2/28/Apple_TV_Plus_Logo.svg/500px-Apple_TV_Plus_Logo.svg.png", tintWhite = true),
+    15 to brand(12, 61, 44, "f/f9/Hulu_logo_(2018).svg/500px-Hulu_logo_(2018).svg.png", tintWhite = false),
+    531 to brand(10, 58, 122, "4/4e/Paramount+_logo.svg/500px-Paramount+_logo.svg.png", tintWhite = true),
+    283 to brand(122, 52, 16, "d/d9/Crunchyroll_2024.svg/500px-Crunchyroll_2024.svg.png", tintWhite = true),
+    232 to brand(70, 20, 88, "6/6e/ZEE5_2025.svg/500px-ZEE5_2025.svg.png", tintWhite = false),
+    // SonyLIV: Commons only has the square app icon, no wordmark.
+    237 to brand(26, 18, 60, "f/f7/SonyLIV_2020.png/500px-SonyLIV_2020.png", tintWhite = false),
+)
+
+private val FallbackBrand = ProviderBrand(Color(26, 26, 46), "", tintWhite = false)
+
+fun providerBrand(providerId: Int): ProviderBrand = ProviderBrands[providerId] ?: FallbackBrand
 
 /**
  * The same services offered by the Discover "Streaming on" filter
