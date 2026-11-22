@@ -19,6 +19,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.provider_logo_appletv
+import nuvio.composeapp.generated.resources.provider_logo_crunchyroll
+import nuvio.composeapp.generated.resources.provider_logo_disney
+import nuvio.composeapp.generated.resources.provider_logo_hbo
+import nuvio.composeapp.generated.resources.provider_logo_hulu
+import nuvio.composeapp.generated.resources.provider_logo_netflix
+import nuvio.composeapp.generated.resources.provider_logo_paramount
+import nuvio.composeapp.generated.resources.provider_logo_prime
+import nuvio.composeapp.generated.resources.provider_logo_sonyliv
+import nuvio.composeapp.generated.resources.provider_logo_zee5
+import org.jetbrains.compose.resources.DrawableResource
 import kotlin.math.roundToInt
 
 /** A streaming service shown in the Home "Providers" row and on the Provider page. */
@@ -31,38 +43,87 @@ data class StreamingProvider(
         get() = logoPath?.takeIf { it.isNotBlank() }?.let { "$TMDB_IMAGE_BASE/w185$it" }
 }
 
+/** Tile background, mirroring the approved CSS: solid, linear (CSS angle) or elliptical radial. */
+sealed interface ProviderBackground {
+    data class Solid(val color: Color) : ProviderBackground
+
+    /** linear-gradient([angleDeg]deg, stops...) with stops as (position 0..1, colour). */
+    class Linear(val angleDeg: Double, val stops: List<Pair<Float, Color>>) : ProviderBackground
+
+    /**
+     * radial-gradient([rxFraction]*width [ryFraction]*height at ([cx]*width, [cy]*height), stops...).
+     */
+    class Radial(
+        val rxFraction: Float,
+        val ryFraction: Float,
+        val cx: Float,
+        val cy: Float,
+        val stops: List<Pair<Float, Color>>,
+    ) : ProviderBackground
+}
+
 /**
- * Tile look for one service: [color] is the gradient's brand colour, [wordmarkUrl] a rectangular
- * wordmark (Wikimedia Commons PNG render of the official SVG/PNG, 500px), and [tintWhite] draws it
- * white when the original logo is dark or the brand's own colour.
+ * Tile look for one service: [color] is the accent used for the provider page glow, [background] the
+ * tile fill, [logo] the bundled logo (composeResources/drawable/provider_logo_*.png, no network) and
+ * [tintWhite] draws it white (ColorFilter.tint SrcIn) when the original logo is dark or single-colour.
  */
 data class ProviderBrand(
     val color: Color,
-    val wordmarkUrl: String,
+    val background: ProviderBackground,
+    val logo: DrawableResource?,
     val tintWhite: Boolean,
 )
 
-private const val COMMONS_THUMB = "https://upload.wikimedia.org/wikipedia/commons/thumb/"
+private fun solid(hex: Long) = ProviderBackground.Solid(Color(hex))
 
-private fun brand(r: Int, g: Int, b: Int, path: String, tintWhite: Boolean) =
-    ProviderBrand(Color(r, g, b), COMMONS_THUMB + path, tintWhite)
+private fun linear(angleDeg: Double, vararg stops: Pair<Float, Long>) =
+    ProviderBackground.Linear(angleDeg, stops.map { it.first to Color(it.second) })
 
-/** Brand colour + wordmark per TMDB provider id (same table as the TV app). */
-private val ProviderBrands: Map<Int, ProviderBrand> = mapOf(
-    8 to brand(184, 29, 36, "0/08/Netflix_2015_logo.svg/500px-Netflix_2015_logo.svg.png", tintWhite = true),
-    9 to brand(15, 61, 92, "9/90/Prime_Video_logo_(2024).svg/500px-Prime_Video_logo_(2024).svg.png", tintWhite = true),
-    337 to brand(26, 77, 184, "7/77/Disney_Plus_logo.svg/500px-Disney_Plus_logo.svg.png", tintWhite = false),
-    1899 to brand(74, 26, 120, "7/7e/HBO_Max_May_2025_(Horizontal).svg/500px-HBO_Max_May_2025_(Horizontal).svg.png", tintWhite = true),
-    350 to brand(28, 28, 30, "2/28/Apple_TV_Plus_Logo.svg/500px-Apple_TV_Plus_Logo.svg.png", tintWhite = true),
-    15 to brand(12, 61, 44, "f/f9/Hulu_logo_(2018).svg/500px-Hulu_logo_(2018).svg.png", tintWhite = false),
-    531 to brand(10, 58, 122, "4/4e/Paramount+_logo.svg/500px-Paramount+_logo.svg.png", tintWhite = true),
-    283 to brand(122, 52, 16, "d/d9/Crunchyroll_2024.svg/500px-Crunchyroll_2024.svg.png", tintWhite = true),
-    232 to brand(70, 20, 88, "6/6e/ZEE5_2025.svg/500px-ZEE5_2025.svg.png", tintWhite = false),
-    // SonyLIV: Commons only has the square app icon, no wordmark.
-    237 to brand(26, 18, 60, "f/f7/SonyLIV_2020.png/500px-SonyLIV_2020.png", tintWhite = false),
-)
+/** Tile background + bundled logo per TMDB provider id (same look as the TV app). */
+private val ProviderBrands: Map<Int, ProviderBrand> by lazy {
+    mapOf(
+        8 to ProviderBrand(Color(0xFFB81D24), solid(0xFF000000), Res.drawable.provider_logo_netflix, tintWhite = false),
+        9 to ProviderBrand(
+            Color(0xFF0A7FD1),
+            linear(135.0, 0f to 0xFF1FA6F2, 0.6f to 0xFF0A7FD1, 1f to 0xFF0868B0),
+            Res.drawable.provider_logo_prime,
+            tintWhite = true,
+        ),
+        337 to ProviderBrand(
+            Color(0xFF1F5FD6),
+            ProviderBackground.Radial(
+                1.2f, 1.0f, 0.5f, 1.1f,
+                listOf(0f to Color(0xFF1F5FD6), 0.55f to Color(0xFF0B1E5B), 1f to Color(0xFF040B26)),
+            ),
+            Res.drawable.provider_logo_disney,
+            tintWhite = false,
+        ),
+        1899 to ProviderBrand(Color(0xFF4A1A78), solid(0xFF000000), Res.drawable.provider_logo_hbo, tintWhite = true),
+        350 to ProviderBrand(Color(0xFF1C1C1E), solid(0xFF000000), Res.drawable.provider_logo_appletv, tintWhite = true),
+        15 to ProviderBrand(Color(0xFF1CE783), solid(0xFF0B0C0F), Res.drawable.provider_logo_hulu, tintWhite = false),
+        531 to ProviderBrand(
+            Color(0xFF0045C4),
+            linear(135.0, 0f to 0xFF0B6BFF, 0.55f to 0xFF0045C4, 1f to 0xFF00195A),
+            Res.drawable.provider_logo_paramount,
+            tintWhite = true,
+        ),
+        283 to ProviderBrand(
+            Color(0xFFF47521),
+            linear(135.0, 0f to 0xFFFF8A2B, 0.55f to 0xFFF47521, 1f to 0xFFC9520E),
+            Res.drawable.provider_logo_crunchyroll,
+            tintWhite = true,
+        ),
+        232 to ProviderBrand(
+            Color(0xFF2A0B45),
+            linear(135.0, 0f to 0xFF2A0B45, 1f to 0xFF14052A),
+            Res.drawable.provider_logo_zee5,
+            tintWhite = false,
+        ),
+        237 to ProviderBrand(Color(0xFF1A123C), solid(0xFF000000), Res.drawable.provider_logo_sonyliv, tintWhite = false),
+    )
+}
 
-private val FallbackBrand = ProviderBrand(Color(26, 26, 46), "", tintWhite = false)
+private val FallbackBrand = ProviderBrand(Color(26, 26, 46), solid(0xFF1A1A2E), null, tintWhite = false)
 
 fun providerBrand(providerId: Int): ProviderBrand = ProviderBrands[providerId] ?: FallbackBrand
 

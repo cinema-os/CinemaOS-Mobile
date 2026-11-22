@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -300,6 +301,7 @@ internal fun CatalogPosterTile(
     cornerRadiusDp: Int,
     hideLabels: Boolean,
     isWatched: Boolean,
+    showTitleLogo: Boolean = false,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -344,6 +346,27 @@ internal fun CatalogPosterTile(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
+            }
+            if (showTitleLogo && !item.logo.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                            ),
+                        )
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    AsyncImage(
+                        model = item.logo,
+                        contentDescription = item.name,
+                        modifier = Modifier.fillMaxWidth(0.7f).height(36.dp),
+                        contentScale = ContentScale.Fit,
+                        alignment = Alignment.CenterStart,
+                    )
+                }
             }
             NuvioPosterWatchedOverlay(isWatched = isWatched)
         }
