@@ -34,6 +34,8 @@ data class CalendarEntry(
     val seasonNumber: Int? = null,
     val episodeNumbers: List<Int> = emptyList(),
     val episodeTitle: String? = null,
+    /** True when the title comes from the user's library / Continue Watching; these sort first within a day. */
+    val fromUserList: Boolean = false,
 )
 
 /** A show or movie the user follows: saved in the library or in Continue Watching. */
@@ -49,7 +51,9 @@ internal data class CalendarSource(
 }
 
 private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p"
-private const val FETCH_CONCURRENCY = 6
+private const val FETCH_CONCURRENCY = 4
+private const val MAX_DISCOVER_SHOWS = 40
+private const val DISCOVER_PAGES = 2
 private const val MAX_CONTINUE_WATCHING_SERIES = 60
 private val SERIES_TYPES = setOf("series", "show", "tv", "tvshow", "anime")
 
@@ -125,24 +129,153 @@ object CalendarRepository {
         val semaphore = Semaphore(FETCH_CONCURRENCY)
         val entries = withContext(Dispatchers.Default) {
             coroutineScope {
-                sources.distinctBy { it.key }.map { source ->
+                val discoverDeferred = async {
+                    runCatching { discoverMonth(month, apiKey, language) }
+                        .onFailure { log.w(it) { "Calendar discover failed for ${month.key}" } }
+                }
+                val userResults = sources.distinctBy { it.key }.map { source ->
                     async {
                         semaphore.withPermit {
                             runCatching {
-                                if (source.isMovie) {
+                                val tmdbId = resolveTmdbId(source)
+                                val list = if (source.isMovie) {
                                     movieEntries(source, month, apiKey, language)
                                 } else {
                                     showEntries(source, month, apiKey, language)
                                 }
+                                Triple(source.isMovie, tmdbId, list.map { it.copy(fromUserList = true) })
                             }.onFailure { log.w(it) { "Calendar lookup failed for ${source.key}" } }
-                                .getOrDefault(emptyList())
+                                .getOrNull()
                         }
                     }
-                }.awaitAll().flatten()
+                }.awaitAll().filterNotNull()
+                val userEntries = userResults.flatMap { it.third }
+                val ownedTmdb = userResults.mapNotNull { (isMovie, id, _) -> id?.let { isMovie to it } }.toSet()
+                val discoverResult = discoverDeferred.await()
+                val discovered = discoverResult.getOrNull()
+                if (discovered == null && userEntries.isEmpty()) throw discoverResult.exceptionOrNull()
+                    ?: IllegalStateException("Calendar discover failed")
+                discovered ?: return@coroutineScope userEntries
+                val discoverEntries = coroutineScope {
+                    val movies = discovered.movies
+                        .filter { (true to it.id) !in ownedTmdb }
+                        .mapNotNull { it.toMovieEntry(month) }
+                    val shows = discovered.shows
+                        .filter { (false to it.id) !in ownedTmdb }
+                        .take(MAX_DISCOVER_SHOWS)
+                        .map { item ->
+                            async {
+                                semaphore.withPermit {
+                                    runCatching {
+                                        val source = CalendarSource(
+                                            id = "tmdb:${item.id}",
+                                            isMovie = false,
+                                            name = item.name.orEmpty().ifBlank { item.title.orEmpty() },
+                                            poster = item.posterPath.tmdbImage("w342"),
+                                            tmdbId = item.id,
+                                            imdbId = null,
+                                        )
+                                        showEntries(source, month, apiKey, language)
+                                    }.onFailure { log.w(it) { "Calendar show lookup failed for tmdb:${item.id}" } }
+                                        .getOrDefault(emptyList())
+                                }
+                            }
+                        }.awaitAll().flatten()
+                    movies + shows
+                }
+                userEntries + discoverEntries
             }
-        }.sortedWith(compareBy<CalendarEntry>({ it.dateIso }, { it.title.lowercase() }))
+        }.sortedWith(
+            compareBy<CalendarEntry>({ it.dateIso }, { if (it.fromUserList) 0 else 1 }, { it.title.lowercase() }),
+        )
         mutex.withLock { monthCache[cacheKey] = entries }
         return entries
+    }
+
+    private class DiscoverResults(val movies: List<TmdbCalendarDiscoverItem>, val shows: List<TmdbCalendarDiscoverItem>)
+
+    /** TMDB discover for the month window, like cinejoy.pk/calendar. Throws when every request failed. */
+    private suspend fun discoverMonth(month: CalendarMonth, apiKey: String, language: String): DiscoverResults =
+        coroutineScope {
+            val start = month.startIso
+            val end = month.endIso
+            val tvAir = (1..DISCOVER_PAGES).map { page ->
+                async {
+                    fetch<TmdbCalendarDiscoverPage>(
+                        "discover/tv",
+                        apiKey,
+                        mapOf(
+                            "language" to language,
+                            "page" to page.toString(),
+                            "sort_by" to "popularity.desc",
+                            "include_adult" to "false",
+                            "air_date.gte" to start,
+                            "air_date.lte" to end,
+                        ),
+                    )
+                }
+            }
+            val tvFirst = async {
+                fetch<TmdbCalendarDiscoverPage>(
+                    "discover/tv",
+                    apiKey,
+                    mapOf(
+                        "language" to language,
+                        "page" to "1",
+                        "sort_by" to "popularity.desc",
+                        "include_adult" to "false",
+                        "first_air_date.gte" to start,
+                        "first_air_date.lte" to end,
+                    ),
+                )
+            }
+            val movieJobs = (1..DISCOVER_PAGES).map { page ->
+                async {
+                    fetch<TmdbCalendarDiscoverPage>(
+                        "discover/movie",
+                        apiKey,
+                        mapOf(
+                            "language" to language,
+                            "page" to page.toString(),
+                            "sort_by" to "popularity.desc",
+                            "include_adult" to "false",
+                            "primary_release_date.gte" to start,
+                            "primary_release_date.lte" to end,
+                        ),
+                    )
+                }
+            }
+            val tvPages = tvAir.awaitAll() + tvFirst.await()
+            val moviePages = movieJobs.awaitAll()
+            if (tvPages.all { it == null } && moviePages.all { it == null }) {
+                throw IllegalStateException("TMDB discover requests failed for ${month.key}")
+            }
+            DiscoverResults(
+                movies = moviePages.filterNotNull().flatMap { it.results }.filter { !it.adult }.distinctBy { it.id },
+                shows = tvPages.filterNotNull().flatMap { it.results }.filter { !it.adult }.distinctBy { it.id },
+            )
+        }
+
+    private fun TmdbCalendarDiscoverItem.toMovieEntry(month: CalendarMonth): CalendarEntry? {
+        val date = normalizeIsoDate(releaseDate)?.takeIf(month::contains) ?: return null
+        val movieTitle = title?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() } ?: return null
+        val poster = posterPath.tmdbImage("w342")
+        return CalendarEntry(
+            key = "movie:tmdb:$id:$date",
+            dateIso = date,
+            preview = MetaPreview(
+                id = "tmdb:$id",
+                type = "movie",
+                name = movieTitle,
+                poster = poster,
+                posterShape = PosterShape.Poster,
+                releaseInfo = date.take(4),
+                rawReleaseDate = date,
+            ),
+            title = movieTitle,
+            poster = poster,
+            isMovie = true,
+        )
     }
 
     private fun monthCacheKey(month: CalendarMonth, sources: List<CalendarSource>): String =
@@ -317,6 +450,21 @@ internal data class TmdbCalendarEpisode(
 internal data class TmdbCalendarMovie(
     val id: Int,
     val title: String? = null,
+    @SerialName("poster_path") val posterPath: String? = null,
+    @SerialName("release_date") val releaseDate: String? = null,
+)
+
+@Serializable
+internal data class TmdbCalendarDiscoverPage(
+    val results: List<TmdbCalendarDiscoverItem> = emptyList(),
+)
+
+@Serializable
+internal data class TmdbCalendarDiscoverItem(
+    val id: Int,
+    val title: String? = null,
+    val name: String? = null,
+    val adult: Boolean = false,
     @SerialName("poster_path") val posterPath: String? = null,
     @SerialName("release_date") val releaseDate: String? = null,
 )

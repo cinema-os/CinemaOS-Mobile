@@ -235,7 +235,7 @@ fun CalendarScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         header()
-                        CalendarBody(uiState, sources.isEmpty(), libraryState.isLoaded, onRetry = { reloadToken += 1 }) {
+                        CalendarBody(uiState, entries.isEmpty(), true, onRetry = { reloadToken += 1 }) {
                             MonthGrid(
                                 month = month,
                                 today = today,
@@ -268,9 +268,9 @@ fun CalendarScreen(
                 ) {
                     item(key = "calendar_header") { header() }
                     val state = uiState
-                    if (state !is CalendarUiState.Loaded || sources.isEmpty()) {
+                    if (state !is CalendarUiState.Loaded || entries.isEmpty()) {
                         item(key = "calendar_status") {
-                            CalendarBody(state, sources.isEmpty(), libraryState.isLoaded, onRetry = { reloadToken += 1 }) {}
+                            CalendarBody(state, entries.isEmpty(), true, onRetry = { reloadToken += 1 }) {}
                         }
                     } else if (listView) {
                         if (byDate.isEmpty()) {
@@ -356,7 +356,7 @@ private fun CalendarBody(
 
         noSources -> HomeEmptyStateCard(
             title = stringResource(Res.string.calendar_nothing_this_month),
-            message = stringResource(Res.string.calendar_empty_sources),
+            message = "",
         )
 
         else -> content()

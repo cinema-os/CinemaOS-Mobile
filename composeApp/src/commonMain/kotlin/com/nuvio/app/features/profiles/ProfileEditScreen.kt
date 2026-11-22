@@ -9,18 +9,14 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -37,19 +33,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.NuvioInputField
 import com.nuvio.app.core.ui.NuvioPrimaryButton
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioSurfaceCard
-import com.nuvio.app.core.ui.themePalette
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.membership.CosmeticEntitlement
 import com.nuvio.app.features.membership.MemberAccessRepository
 import com.nuvio.app.features.membership.ProfileBackgroundRepository
@@ -83,6 +77,7 @@ fun ProfileEditScreen(
     var selectedBackgroundId by rememberSaveable { mutableStateOf(currentProfile?.profileBackgroundId) }
     var selectedBackgroundUrl by rememberSaveable { mutableStateOf(currentProfile?.profileBackgroundUrl) }
     var usesPrimaryAddons by rememberSaveable { mutableStateOf(currentProfile?.usesPrimaryAddons ?: false) }
+    var defaultAvatarApplied by rememberSaveable { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showPinSetup by remember { mutableStateOf(false) }
@@ -101,9 +96,12 @@ fun ProfileEditScreen(
     LaunchedEffect(canChooseBackground) {
         if (canChooseBackground) ProfileBackgroundRepository.preloadLandscapeImages()
     }
-    LaunchedEffect(isNew, avatars, selectedAvatarId, avatarUrl) {
-        if (isNew && avatarUrl.isBlank() && selectedAvatarId == null && avatars.isNotEmpty()) {
+    // New profiles start with a picture avatar. This runs once so picking a colour afterwards
+    // (which switches back to an initial avatar) is not undone.
+    LaunchedEffect(isNew, avatars, defaultAvatarApplied) {
+        if (isNew && !defaultAvatarApplied && avatarUrl.isBlank() && selectedAvatarId == null && avatars.isNotEmpty()) {
             selectedAvatarId = avatars.first().id
+            defaultAvatarApplied = true
         }
     }
 
@@ -115,6 +113,14 @@ fun ProfileEditScreen(
     val visibleAvatarItem = if (customAvatarUrl == null) selectedAvatarItem else null
     val previewAccent = remember(visibleAvatarItem, fallbackColorHex) {
         parseHexColor(visibleAvatarItem?.bgColor ?: fallbackColorHex)
+    }
+    val previewProfile = remember(name, fallbackColorHex, visibleAvatarItem, customAvatarUrl) {
+        NuvioProfile(
+            name = name,
+            avatarColorHex = fallbackColorHex,
+            avatarId = visibleAvatarItem?.id,
+            avatarUrl = customAvatarUrl,
+        )
     }
 
     NuvioScreen(modifier = modifier) {
@@ -131,48 +137,84 @@ fun ProfileEditScreen(
 
         item {
             ProfileIdentityCard(
+                previewProfile = previewProfile,
                 name = name,
-                isNew = isNew,
-                profileIndex = currentProfile?.profileIndex,
                 usesPrimaryAddons = usesPrimaryAddons,
                 onNameChange = { name = it },
                 onUsesPrimaryAddonsChange = { usesPrimaryAddons = it },
-                selectedAvatar = visibleAvatarItem,
-                customAvatarUrl = customAvatarUrl,
-                accentColor = previewAccent,
-                hasAvatarChoices = avatars.isNotEmpty(),
+                avatarCaption = when {
+                    customAvatarUrl != null -> stringResource(Res.string.profile_custom_avatar_selected)
+                    visibleAvatarItem != null -> stringResource(
+                        Res.string.profile_avatar_selected,
+                        visibleAvatarItem.displayName,
+                    )
+                    else -> "Using your initial on the colour below"
+                },
             )
         }
 
         item {
             NuvioSurfaceCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = stringResource(Res.string.profile_custom_avatar_url),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    EditSectionHeader(
+                        title = stringResource(Res.string.profile_choose_avatar),
+                        subtitle = "Pick a picture, browse by category.",
                     )
-                    Text(
-                        text = stringResource(Res.string.profile_custom_avatar_url_description),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    NuvioInputField(
-                        value = avatarUrl,
-                        onValueChange = { value ->
-                            avatarUrl = value
-                            if (value.isNotBlank()) {
-                                selectedAvatarId = null
-                            }
+                    AvatarPicker(
+                        avatars = avatars,
+                        selectedAvatarId = selectedAvatarId.takeIf { customAvatarUrl == null },
+                        onAvatarSelected = { avatar ->
+                            avatarUrl = ""
+                            selectedAvatarId = avatar.id
                         },
-                        placeholder = stringResource(Res.string.profile_custom_avatar_url_placeholder),
                     )
-                    if (avatarUrlIsInvalid) {
-                        Text(
-                            text = stringResource(Res.string.profile_avatar_url_invalid),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
+                }
+            }
+        }
+
+        item {
+            NuvioSurfaceCard {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    EditSectionHeader(
+                        title = "Profile colour",
+                        subtitle = "Choosing a colour switches to an initial avatar on that colour.",
+                    )
+                    ProfileColorPicker(
+                        selectedHex = selectedColorHex,
+                        active = visibleAvatarItem == null && customAvatarUrl == null,
+                        onSelected = { hex ->
+                            selectedColorHex = hex
+                            selectedAvatarId = null
+                            avatarUrl = ""
+                        },
+                    )
+                }
+            }
+        }
+
+        if (!isNew) {
+            item {
+                NuvioSurfaceCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        EditSectionHeader(
+                            title = stringResource(Res.string.profile_security),
+                            subtitle = if (currentProfile?.pinEnabled == true) {
+                                stringResource(Res.string.profile_security_pin_enabled)
+                            } else {
+                                stringResource(Res.string.profile_security_pin_disabled)
+                            },
                         )
+                        if (currentProfile?.pinEnabled == true) {
+                            NuvioPrimaryButton(
+                                text = stringResource(Res.string.profile_remove_pin_lock),
+                                onClick = { showPinClear = true },
+                            )
+                        } else {
+                            NuvioPrimaryButton(
+                                text = stringResource(Res.string.profile_set_pin_lock),
+                                onClick = { showPinSetup = true },
+                            )
+                        }
                     }
                 }
             }
@@ -182,15 +224,9 @@ fun ProfileEditScreen(
             item {
                 NuvioSurfaceCard {
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Text(
-                            text = stringResource(Res.string.profile_choose_background),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = stringResource(Res.string.profile_background_member_note),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        EditSectionHeader(
+                            title = stringResource(Res.string.profile_choose_background),
+                            subtitle = stringResource(Res.string.profile_background_member_note),
                         )
                         ProfileBackgroundPicker(
                             backgrounds = backgroundCatalog,
@@ -210,85 +246,27 @@ fun ProfileEditScreen(
 
         item {
             NuvioSurfaceCard {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text(
-                        text = "Profile colour",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    EditSectionHeader(
+                        title = stringResource(Res.string.profile_custom_avatar_url),
+                        subtitle = stringResource(Res.string.profile_custom_avatar_url_description),
                     )
-                    Text(
-                        text = "Used behind your initial when no avatar picture is selected.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    ProfileColorPicker(
-                        selectedHex = selectedColorHex,
-                        onSelected = { selectedColorHex = it },
-                    )
-                }
-            }
-        }
-
-        item {
-            NuvioSurfaceCard {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text(
-                        text = stringResource(Res.string.profile_choose_avatar),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = selectedAvatarItem?.displayName
-                            ?: if (avatars.isEmpty()) {
-                                stringResource(Res.string.profile_loading_avatars)
-                            } else {
-                                stringResource(Res.string.profile_select_avatar)
-                            },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-
-                    AvatarPicker(
-                        avatars = avatars,
-                        selectedAvatarId = selectedAvatarId.takeIf { customAvatarUrl == null },
-                        onAvatarSelected = { avatar ->
-                            avatarUrl = ""
-                            selectedAvatarId = avatar.id
+                    NuvioInputField(
+                        value = avatarUrl,
+                        onValueChange = { value ->
+                            avatarUrl = value
+                            if (value.isNotBlank()) {
+                                selectedAvatarId = null
+                            }
                         },
+                        placeholder = stringResource(Res.string.profile_custom_avatar_url_placeholder),
                     )
-                }
-            }
-        }
-
-        if (!isNew) {
-            item {
-                NuvioSurfaceCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (avatarUrlIsInvalid) {
                         Text(
-                            text = stringResource(Res.string.profile_security),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            text = stringResource(Res.string.profile_avatar_url_invalid),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
                         )
-                        Text(
-                            text = if (currentProfile?.pinEnabled == true) {
-                                stringResource(Res.string.profile_security_pin_enabled)
-                            } else {
-                                stringResource(Res.string.profile_security_pin_disabled)
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (currentProfile?.pinEnabled == true) {
-                            NuvioPrimaryButton(
-                                text = stringResource(Res.string.profile_remove_pin_lock),
-                                onClick = { showPinClear = true },
-                            )
-                        } else {
-                            NuvioPrimaryButton(
-                                text = stringResource(Res.string.profile_set_pin_lock),
-                                onClick = { showPinSetup = true },
-                            )
-                        }
                     }
                 }
             }
@@ -406,123 +384,54 @@ fun ProfileEditScreen(
 }
 
 @Composable
+private fun EditSectionHeader(
+    title: String,
+    subtitle: String? = null,
+) {
+    val tokens = MaterialTheme.nuvio
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = tokens.colors.textPrimary,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (!subtitle.isNullOrBlank()) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.colors.textMuted,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ProfileIdentityCard(
+    previewProfile: NuvioProfile,
     name: String,
-    isNew: Boolean,
-    profileIndex: Int?,
     usesPrimaryAddons: Boolean,
     onNameChange: (String) -> Unit,
     onUsesPrimaryAddonsChange: (Boolean) -> Unit,
-    selectedAvatar: AvatarCatalogItem?,
-    customAvatarUrl: String?,
-    accentColor: Color,
-    hasAvatarChoices: Boolean,
+    avatarCaption: String,
 ) {
+    val tokens = MaterialTheme.nuvio
     NuvioSurfaceCard {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(88.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (selectedAvatar != null || customAvatarUrl != null) {
-                                accentColor
-                            } else {
-                                accentColor.copy(alpha = 0.18f)
-                            },
-                        )
-                        .border(
-                            width = 2.dp,
-                            color = if (selectedAvatar == null && customAvatarUrl == null) {
-                                accentColor.copy(alpha = 0.35f)
-                            } else {
-                                Color.Transparent
-                            },
-                            shape = CircleShape,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (customAvatarUrl != null) {
-                        AsyncImage(
-                            model = customAvatarUrl,
-                            contentDescription = name,
-                            modifier = Modifier.size(88.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else if (selectedAvatar != null) {
-                        AsyncImage(
-                            model = avatarImageUrl(selectedAvatar),
-                            contentDescription = selectedAvatar.displayName,
-                            modifier = Modifier.size(88.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else if (name.isNotBlank()) {
-                        Text(
-                            text = name.take(1).uppercase(),
-                            style = MaterialTheme.typography.displayLarge,
-                            color = accentColor,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.Person,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(40.dp),
-                        )
-                    }
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = name.ifBlank {
-                            if (isNew) stringResource(Res.string.profile_new)
-                            else stringResource(Res.string.profile_unnamed)
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = listOf(
-                            if (isNew) {
-                                stringResource(Res.string.profile_new)
-                            } else {
-                                profileIndex?.let { stringResource(Res.string.profile_label_number, it) }
-                                    ?: stringResource(Res.string.profile_unnamed)
-                            },
-                            if (usesPrimaryAddons) {
-                                stringResource(Res.string.profile_primary_addons_on)
-                            } else {
-                                stringResource(Res.string.profile_primary_addons_off)
-                            },
-                        ).joinToString("  |  "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = when {
-                            customAvatarUrl != null -> stringResource(Res.string.profile_custom_avatar_selected)
-                            selectedAvatar != null -> stringResource(
-                                Res.string.profile_avatar_selected,
-                                selectedAvatar.displayName,
-                            )
-                            hasAvatarChoices -> stringResource(Res.string.profile_choose_avatar_below)
-                            else -> stringResource(Res.string.profile_avatar_options_pending)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            ProfileAvatarView(
+                profile = previewProfile,
+                size = 128.dp,
+            )
+            Text(
+                text = avatarCaption,
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.colors.textMuted,
+                textAlign = TextAlign.Center,
+            )
 
             NuvioInputField(
                 value = name,
@@ -540,10 +449,10 @@ private fun ProfileIdentityCard(
     }
 }
 
-
 @Composable
 private fun ProfileColorPicker(
     selectedHex: String,
+    active: Boolean,
     onSelected: (String) -> Unit,
 ) {
     val spacing = 10.dp
@@ -554,7 +463,7 @@ private fun ProfileColorPicker(
             PROFILE_COLORS.chunked(columns).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
                     row.forEach { hex ->
-                        val selected = hex.equals(selectedHex, ignoreCase = true)
+                        val selected = active && hex.equals(selectedHex, ignoreCase = true)
                         Box(
                             modifier = Modifier
                                 .size(swatchSize)

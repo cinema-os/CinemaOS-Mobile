@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,10 @@ fun ProfileAvatarView(
     val imageUrl = remember(profile?.avatarUrl, avatarItem) {
         profile?.let { profileAvatarImageUrl(it, avatarItem) }
     }
+    val emoji = remember(profile?.avatarUrl, avatarItem) {
+        profile?.let { profileAvatarEmoji(it, avatarItem) }
+    }
+    val hasPicture = imageUrl != null || emoji != null
     val accent = remember(profile?.avatarColorHex, avatarItem) {
         parseHexColor(avatarItem?.bgColor ?: profile?.avatarColorHex ?: PROFILE_COLORS.first())
     }
@@ -50,9 +55,9 @@ fun ProfileAvatarView(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(if (imageUrl != null) accent else accent.copy(alpha = 0.18f))
+            .background(if (hasPicture) accent else accent.copy(alpha = 0.18f))
             .then(
-                if (imageUrl == null) Modifier.border(2.dp, accent.copy(alpha = 0.4f), CircleShape)
+                if (!hasPicture) Modifier.border(2.dp, accent.copy(alpha = 0.4f), CircleShape)
                 else Modifier,
             ),
         contentAlignment = Alignment.Center,
@@ -63,6 +68,11 @@ fun ProfileAvatarView(
                 contentDescription = profile?.name,
                 modifier = Modifier.size(size).clip(CircleShape),
                 contentScale = ContentScale.Crop,
+            )
+            emoji != null -> Text(
+                text = emoji,
+                fontSize = (size.value * 0.5f).sp,
+                textAlign = TextAlign.Center,
             )
             !profile?.name.isNullOrBlank() -> Text(
                 text = profile!!.name.take(1).uppercase(),

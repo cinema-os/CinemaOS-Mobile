@@ -65,6 +65,8 @@ data class AvatarCatalogItem(
     @SerialName("bg_color") val bgColor: String? = null,
     @Transient val localImageUrl: String? = null,
     @Transient val memberOnly: Boolean = false,
+    /** Built-in picture avatar drawn as an emoji on [bgColor]; needs no network or backend. */
+    @Transient val emoji: String? = null,
 )
 
 fun parseHexColor(hex: String): Color {
@@ -109,3 +111,15 @@ fun String.isValidAvatarUrl(): Boolean {
 fun profileAvatarImageUrl(profile: NuvioProfile, avatar: AvatarCatalogItem?): String? =
     normalizedAvatarUrl(profile.avatarUrl)
         ?: avatar?.let(::avatarImageUrl)
+
+/** Emoji to draw for [profile], or null when a custom avatar URL wins or the avatar is an image. */
+fun profileAvatarEmoji(profile: NuvioProfile, avatar: AvatarCatalogItem?): String? =
+    if (normalizedAvatarUrl(profile.avatarUrl) != null) null else avatar?.emoji
+
+/** "character" / "space_fun" -> "Character" / "Space Fun" for category tabs and headings. */
+fun avatarCategoryTitle(category: String): String =
+    category.replace('_', ' ').replace('-', ' ').trim()
+        .split(' ')
+        .filter { it.isNotEmpty() }
+        .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
+        .ifEmpty { "Avatars" }

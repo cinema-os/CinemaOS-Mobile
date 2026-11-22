@@ -588,6 +588,10 @@ private fun PopupProfileBubble(
     val avatarImageUrl = remember(profile.avatarUrl, avatarItem) {
         profileAvatarImageUrl(profile, avatarItem)
     }
+    val avatarEmoji = remember(profile.avatarUrl, avatarItem) {
+        profileAvatarEmoji(profile, avatarItem)
+    }
+    val hasPicture = avatarImageUrl != null || avatarEmoji != null
 
     // Per-item entrance animation
     val itemAlpha = remember { Animatable(0f) }
@@ -643,7 +647,7 @@ private fun PopupProfileBubble(
                     .size(48.dp)
                     .clip(tokens.shapes.avatar)
                     .background(
-                        if (avatarImageUrl != null) {
+                        if (hasPicture) {
                             avatarItem?.bgColor?.let { parseHexColor(it) } ?: avatarColor
                         } else {
                             avatarColor.copy(alpha = 0.15f)
@@ -661,7 +665,7 @@ private fun PopupProfileBubble(
                                 avatarColor.copy(alpha = 0.6f),
                                 tokens.shapes.avatar,
                             )
-                            avatarImageUrl == null -> Modifier.border(
+                            !hasPicture -> Modifier.border(
                                 tokens.borders.thin + NuvioTokens.Space.hairline,
                                 avatarColor.copy(alpha = 0.3f),
                                 tokens.shapes.avatar,
@@ -677,6 +681,11 @@ private fun PopupProfileBubble(
                         contentDescription = profile.name,
                         modifier = Modifier.size(48.dp).clip(tokens.shapes.avatar),
                         contentScale = ContentScale.Crop,
+                    )
+                } else if (avatarEmoji != null) {
+                    Text(
+                        text = avatarEmoji,
+                        fontSize = 26.sp,
                     )
                 } else if (profile.name.isNotBlank()) {
                     Text(
@@ -768,6 +777,10 @@ fun ActiveProfileMiniAvatar(
     val avatarImageUrl = remember(profile.avatarUrl, avatarItem) {
         profileAvatarImageUrl(profile, avatarItem)
     }
+    val avatarEmoji = remember(profile.avatarUrl, avatarItem) {
+        profileAvatarEmoji(profile, avatarItem)
+    }
+    val hasPicture = avatarImageUrl != null || avatarEmoji != null
 
     val borderColor = if (selected) {
         tokens.colors.borderSelected
@@ -780,7 +793,7 @@ fun ActiveProfileMiniAvatar(
             .size(size.dp)
             .clip(tokens.shapes.avatar)
             .background(
-                if (avatarImageUrl != null) {
+                if (hasPicture) {
                     avatarItem?.bgColor?.let { parseHexColor(it) } ?: avatarColor
                 } else {
                     avatarColor.copy(alpha = 0.15f)
@@ -795,6 +808,11 @@ fun ActiveProfileMiniAvatar(
                 contentDescription = profile.name,
                 modifier = Modifier.size(size.dp).clip(tokens.shapes.avatar),
                 contentScale = ContentScale.Crop,
+            )
+        } else if (avatarEmoji != null) {
+            Text(
+                text = avatarEmoji,
+                fontSize = (size * 0.55f).sp,
             )
         } else if (profile.name.isNotBlank()) {
             Text(

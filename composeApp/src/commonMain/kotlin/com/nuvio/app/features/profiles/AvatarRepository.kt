@@ -62,7 +62,9 @@ object AvatarRepository {
     private val log = Logger.withTag("AvatarRepository")
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    private val _avatars = MutableStateFlow<List<AvatarCatalogItem>>(emptyList())
+    // Built-in picture avatars are available immediately; the remote catalog is added on top
+    // of them when the backend is configured and reachable.
+    private val _avatars = MutableStateFlow<List<AvatarCatalogItem>>(BuiltInAvatarCatalog)
     val avatars: StateFlow<List<AvatarCatalogItem>> = _avatars.asStateFlow()
 
     private var standardCatalog = emptyList<AvatarCatalogItem>()
@@ -162,6 +164,10 @@ object AvatarRepository {
 
     private suspend fun fetchStandardCatalog() {
         if (standardFetchInFlight) return
+        if (!isBackendConfigured()) {
+            log.i { "Remote avatar catalog skipped: NUVIO_SUPABASE_URL / NUVIO_SUPABASE_ANON_KEY are blank, using built-in avatars" }
+            return
+        }
         standardFetchInFlight = true
         try {
             val result = SupabaseProvider.client.postgrest.rpc("get_avatar_catalog")
@@ -184,6 +190,7 @@ object AvatarRepository {
 
     private suspend fun fetchMemberCatalog() {
         if (memberFetchInFlight) return
+        if (!isBackendConfigured()) return
         memberFetchInFlight = true
         try {
             val remote = SupabaseProvider.client.postgrest
@@ -259,11 +266,16 @@ object AvatarRepository {
         )
     }
 
+    private fun isBackendConfigured(): Boolean {
+        val configuration = ServerConfigurationRepository.active.value
+        return configuration.backendUrl.isNotBlank() && configuration.publishableKey.isNotBlank()
+    }
+
     private fun publishCatalog() {
         _avatars.value = availableAvatarCatalog(
             standardCatalog = standardCatalog,
             memberCatalog = memberCatalog,
             hasMemberAccess = hasMemberAccess,
-        )
+        ) + BuiltInAvatarCatalog
     }
 }

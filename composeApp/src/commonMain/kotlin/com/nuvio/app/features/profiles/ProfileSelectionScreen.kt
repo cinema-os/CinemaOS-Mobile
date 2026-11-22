@@ -338,6 +338,9 @@ private fun ProfileAvatarCard(
     val avatarImageUrl = remember(profile.avatarUrl, avatarItem) {
         profileAvatarImageUrl(profile, avatarItem)
     }
+    val avatarEmoji = remember(profile.avatarUrl, avatarItem) {
+        profileAvatarEmoji(profile, avatarItem)
+    }
 
     val animAlpha = remember { Animatable(0f) }
     val animScale = remember { Animatable(0.85f) }
@@ -377,7 +380,7 @@ private fun ProfileAvatarCard(
             modifier = Modifier.size(110.dp),
             contentAlignment = Alignment.Center,
         ) {
-            if (avatarImageUrl != null) {
+            if (avatarImageUrl != null || avatarEmoji != null) {
                 val bgColor = avatarItem?.bgColor?.let { parseHexColor(it) } ?: avatarColor
                 Box(
                     modifier = Modifier
@@ -399,7 +402,7 @@ private fun ProfileAvatarCard(
                         },
                     )
                     .then(
-                        if (avatarImageUrl == null) Modifier.border(2.dp, avatarColor.copy(alpha = 0.4f), CircleShape)
+                        if (avatarImageUrl == null && avatarEmoji == null) Modifier.border(2.dp, avatarColor.copy(alpha = 0.4f), CircleShape)
                         else Modifier,
                     ),
                 contentAlignment = Alignment.Center,
@@ -410,6 +413,11 @@ private fun ProfileAvatarCard(
                         contentDescription = avatarItem?.displayName ?: profile.name,
                         modifier = Modifier.size(100.dp).clip(CircleShape),
                         contentScale = ContentScale.Crop,
+                    )
+                } else if (avatarEmoji != null) {
+                    Text(
+                        text = avatarEmoji,
+                        fontSize = 50.sp,
                     )
                 } else if (profile.name.isNotBlank()) {
                     Text(

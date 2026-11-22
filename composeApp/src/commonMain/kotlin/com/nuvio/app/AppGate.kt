@@ -46,6 +46,7 @@ import com.nuvio.app.features.profiles.ProfileEditScreen
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.profiles.ProfileSelectionScreen
 import com.nuvio.app.features.profiles.ProfileSwitchRequests
+import com.nuvio.app.features.profiles.profileAvatarEmoji
 import com.nuvio.app.features.profiles.profileAvatarImageUrl
 import com.nuvio.app.navigation.AppRoute
 import kotlinx.coroutines.launch
@@ -142,8 +143,11 @@ internal fun AppGate(
         val avatarItem = activeProfile?.avatarId?.let { avatarId ->
             profileAvatars.find { it.id == avatarId }
         }
+        // The native iOS tab bar draws the first character of `name` when there is no image URL,
+        // so built-in emoji avatars are published through it.
+        val avatarEmoji = activeProfile?.let { profileAvatarEmoji(it, avatarItem) }
         NativeTabBridge.publishProfileTabIcon(
-            name = activeProfile?.name,
+            name = avatarEmoji ?: activeProfile?.name,
             avatarColorHex = activeProfile?.avatarColorHex,
             avatarImageUrl = activeProfile?.let { profileAvatarImageUrl(it, avatarItem) },
             avatarBackgroundColorHex = avatarItem?.bgColor,
