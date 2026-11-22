@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -113,6 +114,7 @@ private class DiscoverField(
  * (series) and age rating (movies). Anime swaps in anime genres (no Animation), Format (TV / Movie), Season, Status
  * and a reduced sort list, and hides age rating and revenue.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DiscoverTmdbFilters(
     state: DiscoverUiState,
@@ -123,6 +125,7 @@ internal fun DiscoverTmdbFilters(
     val filters = state.filters
     val fields = discoverFields(state, onFiltersChange)
     var showAllFilters by remember { mutableStateOf(false) }
+    var chipsExpanded by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = modifier,
@@ -139,15 +142,33 @@ internal fun DiscoverTmdbFilters(
                 activeCount = filters.activeCount,
                 onClick = { showAllFilters = true },
             )
-            Row(
+            if (!chipsExpanded) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    fields.forEach { field -> DiscoverFilterChip(field) }
+                    DiscoverChipsToggle(expanded = false) { chipsExpanded = true }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+                DiscoverChipsToggle(expanded = true) { chipsExpanded = false }
+                Spacer(modifier = Modifier.width(FilterBarHorizontalPadding))
+            }
+        }
+        if (chipsExpanded) {
+            FlowRow(
                 modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
+                    .fillMaxWidth()
+                    .padding(horizontal = FilterBarHorizontalPadding),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 fields.forEach { field -> DiscoverFilterChip(field) }
-                Spacer(modifier = Modifier.width(8.dp))
             }
         }
 
@@ -485,6 +506,26 @@ private fun DiscoverPill(
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
+}
+
+/** Switches the filter chip bar between a single scrolling row (compact) and the full wrapped list. */
+@Composable
+private fun DiscoverChipsToggle(expanded: Boolean, onClick: () -> Unit) {
+    val tokens = MaterialTheme.nuvio
+    DiscoverPill(active = false, onClick = onClick) {
+        Text(
+            text = if (expanded) "Show less" else "Show all",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+            color = tokens.colors.textSecondary,
+            maxLines = 1,
+        )
+        Icon(
+            imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+            contentDescription = null,
+            modifier = Modifier.size(NuvioTokens.Icon.sm + NuvioTokens.Space.s2),
+            tint = tokens.colors.textMuted,
+        )
+    }
 }
 
 @Composable

@@ -17,6 +17,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -85,46 +86,39 @@ internal fun MainTabsDestination(
         val savedNavBarStyle by remember { ThemeSettingsRepository.navBarStyle }.collectAsStateWithLifecycle()
         val navBarStyleSetting = savedNavBarStyle
         val navBarGlowEnabled by ThemeSettingsRepository.navBarGlowEnabled.collectAsStateWithLifecycle()
-        val navigationOrder = listOf(AppScreenTab.Home, AppScreenTab.Search, AppScreenTab.Library,
-            AppScreenTab.Anime, AppScreenTab.Sports, AppScreenTab.Settings)
-        val floatingNavigationItems = listOf(
-            FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.Home,
-                onClick = { onTabSelected(AppScreenTab.Home) },
-                morph = DockIconKind.Home,
-                label = stringResource(Res.string.compose_nav_home),
-            ),
-            FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.Search,
-                onClick = { onTabSelected(AppScreenTab.Search) },
-                morph = DockIconKind.Search,
-                label = stringResource(Res.string.compose_nav_search),
-            ),
-            FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.Library,
-                onClick = { onTabSelected(AppScreenTab.Library) },
-                morph = DockIconKind.Library,
-                label = stringResource(Res.string.compose_nav_library),
-            ),
-            FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.Anime,
-                onClick = { onTabSelected(AppScreenTab.Anime) },
-                morph = DockIconKind.Anime,
-                label = stringResource(Res.string.compose_nav_anime),
-            ),
-            FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.Sports,
-                onClick = { onTabSelected(AppScreenTab.Sports) },
-                morph = DockIconKind.Sports,
-                label = stringResource(Res.string.compose_nav_sports),
-            ),
-            FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.Settings,
-                onClick = { onTabSelected(AppScreenTab.Settings) },
-                morph = DockIconKind.Profile,
-                label = stringResource(Res.string.compose_nav_profile),
-            ),
-        ).filterIndexed { index, _ -> navigationOrder[index].name !in hiddenPages }
+        val homeLabel = stringResource(Res.string.compose_nav_home)
+        val searchLabel = stringResource(Res.string.compose_nav_search)
+        val libraryLabel = stringResource(Res.string.compose_nav_library)
+        val animeLabel = stringResource(Res.string.compose_nav_anime)
+        val sportsLabel = stringResource(Res.string.compose_nav_sports)
+        val profileLabel = stringResource(Res.string.compose_nav_profile)
+        // Rebuilt only when the selected tab, hidden pages, labels or the tab callback change, so
+        // unrelated recompositions of this screen do not hand the dock a fresh list of new lambdas.
+        val currentOnTabSelected by rememberUpdatedState(onTabSelected)
+        val floatingNavigationItems = remember(
+            selectedTab, hiddenPages, homeLabel, searchLabel, libraryLabel, animeLabel, sportsLabel, profileLabel,
+        ) {
+            val navigationOrder = listOf(
+                AppScreenTab.Home, AppScreenTab.Search, AppScreenTab.Library,
+                AppScreenTab.Anime, AppScreenTab.Sports, AppScreenTab.Settings,
+            )
+            val kinds = listOf(
+                DockIconKind.Home, DockIconKind.Search, DockIconKind.Library,
+                DockIconKind.Anime, DockIconKind.Sports, DockIconKind.Profile,
+            )
+            val labels = listOf(homeLabel, searchLabel, libraryLabel, animeLabel, sportsLabel, profileLabel)
+            navigationOrder.indices
+                .filter { navigationOrder[it].name !in hiddenPages }
+                .map { index ->
+                    val tab = navigationOrder[index]
+                    FloatingNavigationItem(
+                        selected = selectedTab == tab,
+                        onClick = { currentOnTabSelected(tab) },
+                        morph = kinds[index],
+                        label = labels[index],
+                    )
+                }
+        }
 
         Scaffold(
             modifier = Modifier

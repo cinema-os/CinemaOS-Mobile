@@ -111,37 +111,42 @@ private val icons: Map<DockIconKind, MorphIcon> by lazy {
             inactive = "M 4 5 L 20 5 C 21.1 5 22 5.9 22 7 L 22 17 C 22 18.1 21.1 19 20 19 L 4 19 C 2.9 19 2 18.1 2 17 L 2 7 C 2 5.9 2.9 5 4 5 Z M 8 22 L 16 22 M 10 19 L 10 22 M 14 19 L 14 22 M 12 8 C 15.3 8 18 10.7 18 14 M 12 11 C 13.7 11 15 12.3 15 14 M 12 14 L 12 14.05",
             active = "M 4 5 L 20 5 C 21.1 5 22 5.9 22 7 L 22 17 C 22 18.1 21.1 19 20 19 L 4 19 C 2.9 19 2 18.1 2 17 L 2 7 C 2 5.9 2.9 5 4 5 Z M 8 22 L 16 22 M 10 19 L 10 22 M 14 19 L 14 22 M 12 8 C 15.3 8 18 10.7 18 14 M 12 11 C 13.7 11 15 12.3 15 14 M 12 14 L 12 14.05",
         ),
+        // Person glyph sized to the full 24 x 24 grid (head 3..12, shoulders 14..22) so it reads as
+        // large as the other tab icons; head and shoulders are centred on the grid, not top-heavy.
         DockIconKind.Profile to MorphIcon(
-            inactive = circle(12f, 8f, 4f) +
-                " M 4 21 L 4 19 C 4 16.5 7.5 15 12 15 C 16.5 15 20 16.5 20 19 L 20 21 Z",
-            active = circle(12f, 7.5f, 4.6f) +
-                " M 3.5 21.5 L 3.5 19 C 3.5 16 7.5 14.5 12 14.5 C 16.5 14.5 20.5 16 20.5 19 L 20.5 21.5 Z",
+            inactive = circle(12f, 7.5f, 4.5f) +
+                " M 3.5 21.5 L 3.5 20 C 3.5 16.6 7.3 14.5 12 14.5 C 16.7 14.5 20.5 16.6 20.5 20 L 20.5 21.5 Z",
+            active = circle(12f, 7f, 5f) +
+                " M 2.5 22 L 2.5 20 C 2.5 16.2 6.8 14 12 14 C 17.2 14 21.5 16.2 21.5 20 L 21.5 22 Z",
         ),
     )
 }
 
 /**
- * @param progress 0 = inactive outline, 1 = active filled shape. Values slightly outside 0..1 (spring
- * overshoot) are allowed and give the morph a little bounce.
+ * @param progress 0 = inactive outline, 1 = active filled shape. Read inside the draw phase, so
+ * animating it never recomposes the caller.
+ * @param tint icon colour, also read in the draw phase.
  */
 @Composable
 internal fun DockMorphIcon(
     kind: DockIconKind,
-    progress: Float,
-    tint: Color,
+    progress: () -> Float,
+    tint: () -> Color,
     modifier: Modifier = Modifier,
 ) {
     val icon = remember(kind) { icons.getValue(kind) }
     val path = remember { Path() }
     Canvas(modifier) {
         val s = size.width / 24f
-        icon.build(path, progress)
-        val fillAlpha = progress.coerceIn(0f, 1f)
+        val p = progress()
+        val color = tint()
+        icon.build(path, p)
+        val fillAlpha = p.coerceIn(0f, 1f)
         withTransform({ scale(s, s, pivot = androidx.compose.ui.geometry.Offset.Zero) }) {
-            if (fillAlpha > 0f) drawPath(path, tint.copy(alpha = tint.alpha * fillAlpha), style = Fill)
+            if (fillAlpha > 0f) drawPath(path, color.copy(alpha = color.alpha * fillAlpha), style = Fill)
             drawPath(
                 path,
-                tint,
+                color,
                 style = Stroke(width = 1.9f, cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
         }

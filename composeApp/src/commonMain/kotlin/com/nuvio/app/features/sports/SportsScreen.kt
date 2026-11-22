@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -612,6 +619,7 @@ private fun LiveBadge(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SportFilterChips(
     filters: List<SportFilter>,
@@ -620,19 +628,48 @@ private fun SportFilterChips(
     contentPadding: PaddingValues,
     onSelected: (SportFilter) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(contentPadding),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        filters.forEach { filter ->
-            SportChip(
-                label = labels[filter].orEmpty(),
-                isSelected = filter == selected,
-                onClick = { onSelected(filter) },
-            )
+    // Compact (default): one scrolling row, selected chip first. Expanded: full wrapped list.
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val toggle: @Composable () -> Unit = {
+        SportChip(
+            label = if (expanded) "Show less" else "Show all",
+            isSelected = false,
+            onClick = { expanded = !expanded },
+            icon = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+        )
+    }
+    if (expanded) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(contentPadding),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            filters.forEach { filter ->
+                SportChip(
+                    label = labels[filter].orEmpty(),
+                    isSelected = filter == selected,
+                    onClick = { onSelected(filter) },
+                )
+            }
+            toggle()
+        }
+    } else {
+        val ordered = listOf(selected) + filters.filter { it != selected }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(contentPadding),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ordered.forEach { filter ->
+                SportChip(
+                    label = labels[filter].orEmpty(),
+                    isSelected = filter == selected,
+                    onClick = { onSelected(filter) },
+                )
+            }
+            toggle()
         }
     }
 }
@@ -642,6 +679,7 @@ private fun SportChip(
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (isSelected) {
@@ -670,13 +708,23 @@ private fun SportChip(
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            color = contentColor,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-            maxLines = 1,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                color = contentColor,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+            )
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
     }
 }
 
