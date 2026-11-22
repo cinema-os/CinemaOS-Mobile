@@ -1,5 +1,6 @@
 package com.nuvio.app.features.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,9 +16,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,6 +51,7 @@ import com.nuvio.app.features.profiles.NuvioProfile
 import com.nuvio.app.features.profiles.ProfileAvatarView
 import com.nuvio.app.features.profiles.ProfileEditScreen
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.profiles.ProfileSwitchRequests
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_cancel
@@ -102,6 +106,11 @@ private fun AccountSettingsBody(
             profile = activeProfile,
             email = accountEmail,
             onEditClick = { showProfileEditor = true },
+            onSwitchClick = if (activeProfile != null) {
+                { ProfileSwitchRequests.request() }
+            } else {
+                null
+            },
         )
 
         CinemaOsAccountCard()
@@ -231,6 +240,7 @@ private fun ProfileHeaderCard(
     profile: NuvioProfile?,
     email: String?,
     onEditClick: () -> Unit,
+    onSwitchClick: (() -> Unit)? = null,
 ) {
     val tokens = MaterialTheme.nuvio
     NuvioSurfaceCard {
@@ -268,6 +278,24 @@ private fun ProfileHeaderCard(
             text = if (profile == null) "Create profile" else "Edit profile",
             onClick = onEditClick,
         )
+        if (onSwitchClick != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onSwitchClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, tokens.colors.textMuted.copy(alpha = 0.35f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = tokens.colors.textPrimary),
+            ) {
+                Text(
+                    text = "Switch profile",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
     }
 }
 

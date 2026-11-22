@@ -317,9 +317,21 @@ object ProfileRepository {
         }
     }
 
+    /**
+     * CinemaOS runs on a local (anonymous) account with no profile backend, so PINs are stored and
+     * checked on the device only (salted SHA-256 in [ProfilePinCacheStorage]).
+     */
+    private val usesLocalPins: Boolean
+        get() = AuthRepository.state.value.let { it !is AuthState.Authenticated || it.isAnonymous }
+
+    private val failedPinAttempts = mutableMapOf<Int, Int>()
+    private val pinLockedUntilMs = mutableMapOf<Int, Long>()
+
+    private fun isValidPin(pin: String): Boolean = pin.length == 4 && pin.all { it.isDigit() }
+
     suspend fun verifyPin(profileIndex: Int, pin: String): PinVerifyResult {
-        if (AuthRepository.state.value !is AuthState.Authenticated) {
-            return verifyPinLocally(profileIndex, pin)
+        if (usesLocalPins) {
+            return verifyPinLocallyWithLockout(profileIndex, pin)
         }
 
         return runCatching {
@@ -341,8 +353,8 @@ object ProfileRepository {
     }
 
     suspend fun setPin(profileIndex: Int, pin: String, currentPin: String? = null): PinVerifyResult {
-        if (AuthRepository.state.value !is AuthState.Authenticated) {
-            return PinVerifyResult(unlocked = false, message = getString(Res.string.profile_pin_set_requires_internet))
+        if (usesLocalPins) {
+            return setPinLocally(profileIndex, pin, currentPin)
         }
 
         return runCatching {
@@ -363,8 +375,8 @@ object ProfileRepository {
     }
 
     suspend fun clearPin(profileIndex: Int, currentPin: String? = null): PinVerifyResult {
-        if (AuthRepository.state.value !is AuthState.Authenticated) {
-            return PinVerifyResult(unlocked = false, message = getString(Res.string.profile_pin_clear_requires_internet))
+        if (usesLocalPins) {
+            return clearPinLocally(profileIndex, currentPin)
         }
 
         return runCatching {
@@ -409,10 +421,15 @@ object ProfileRepository {
 
     private fun applyPayloadsLocally(payloads: List<ProfilePushPayload>) {
         val authState = AuthRepository.state.value as? AuthState.Authenticated ?: return
+        val existingByIndex = _state.value.profiles.associateBy { it.profileIndex }
         val profiles = payloads.map { p ->
+            val existing = existingByIndex[p.profileIndex]
             NuvioProfile(
-                id = "",
+                id = existing?.id.orEmpty(),
                 userId = authState.userId,
+                // Keep the local PIN lock when the profile is edited (payloads carry no PIN state).
+                pinEnabled = existing?.pinEnabled ?: false,
+                createdAt = existing?.createdAt.orEmpty(),
                 profileIndex = p.profileIndex,
                 name = p.name,
                 avatarColorHex = p.avatarColorHex,
@@ -470,6 +487,67 @@ object ProfileRepository {
         ProfilePinCacheStorage.savePayload(profileIndex, json.encodeToString(payload))
     }
 
+    private fun setProfilePinEnabled(profileIndex: Int, enabled: Boolean) {
+        val updated = _state.value.profiles.map { profile ->
+            if (profile.profileIndex == profileIndex) profile.copy(pinEnabled = enabled) else profile
+        }
+        _state.value = _state.value.copy(
+            profiles = updated,
+            activeProfile = updated.find { it.profileIndex == _state.value.activeProfile?.profileIndex }
+                ?: _state.value.activeProfile,
+        )
+        persist()
+    }
+
+    private fun verifyPinLocallyWithLockout(profileIndex: Int, pin: String): PinVerifyResult {
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val lockedUntil = pinLockedUntilMs[profileIndex] ?: 0L
+        if (now < lockedUntil) {
+            return PinVerifyResult(unlocked = false, retryAfterSeconds = ((lockedUntil - now + 999) / 1000).toInt())
+        }
+        val result = verifyPinLocally(profileIndex, pin)
+        if (result.unlocked) {
+            failedPinAttempts.remove(profileIndex)
+            pinLockedUntilMs.remove(profileIndex)
+            return result
+        }
+        val failures = (failedPinAttempts[profileIndex] ?: 0) + 1
+        failedPinAttempts[profileIndex] = failures
+        if (failures >= LOCAL_PIN_MAX_ATTEMPTS) {
+            failedPinAttempts.remove(profileIndex)
+            pinLockedUntilMs[profileIndex] = now + LOCAL_PIN_LOCKOUT_SECONDS * 1000L
+            return PinVerifyResult(unlocked = false, retryAfterSeconds = LOCAL_PIN_LOCKOUT_SECONDS)
+        }
+        return result
+    }
+
+    private suspend fun setPinLocally(profileIndex: Int, pin: String, currentPin: String?): PinVerifyResult {
+        val profile = _state.value.profiles.find { it.profileIndex == profileIndex }
+            ?: return PinVerifyResult(unlocked = false, message = getString(Res.string.profile_pin_set_failed))
+        if (!isValidPin(pin)) {
+            return PinVerifyResult(unlocked = false, message = getString(Res.string.profile_pin_set_failed))
+        }
+        if (profile.pinEnabled) {
+            val check = verifyPinLocallyWithLockout(profileIndex, currentPin.orEmpty())
+            if (!check.unlocked) return check
+        }
+        rememberVerifiedPin(profileIndex = profileIndex, pin = pin)
+        setProfilePinEnabled(profileIndex, enabled = true)
+        return PinVerifyResult(unlocked = true)
+    }
+
+    private fun clearPinLocally(profileIndex: Int, currentPin: String?): PinVerifyResult {
+        val profile = _state.value.profiles.find { it.profileIndex == profileIndex }
+            ?: return PinVerifyResult(unlocked = true)
+        if (profile.pinEnabled) {
+            val check = verifyPinLocallyWithLockout(profileIndex, currentPin.orEmpty())
+            if (!check.unlocked) return check
+        }
+        ProfilePinCacheStorage.removePayload(profileIndex)
+        setProfilePinEnabled(profileIndex, enabled = false)
+        return PinVerifyResult(unlocked = true)
+    }
+
     private fun verifyPinLocally(profileIndex: Int, pin: String): PinVerifyResult {
         val profile = _state.value.profiles.find { it.profileIndex == profileIndex }
         if (profile?.pinEnabled != true) {
@@ -477,6 +555,12 @@ object ProfileRepository {
         }
 
         val payload = ProfilePinCacheStorage.loadPayload(profileIndex).orEmpty().trim()
+        if (payload.isEmpty() && usesLocalPins) {
+            // Local-only PIN whose hash was wiped (app data cleared): there is nothing to check
+            // against and no server to recover from, so drop the stale lock instead of locking out.
+            setProfilePinEnabled(profileIndex, enabled = false)
+            return PinVerifyResult(unlocked = true)
+        }
         if (payload.isEmpty()) {
             return PinVerifyResult(
                 unlocked = false,
@@ -556,6 +640,9 @@ object ProfileRepository {
         )
     }
 }
+
+private const val LOCAL_PIN_MAX_ATTEMPTS = 5
+private const val LOCAL_PIN_LOCKOUT_SECONDS = 30
 
 @kotlinx.serialization.Serializable
 data class ProfileLockState(

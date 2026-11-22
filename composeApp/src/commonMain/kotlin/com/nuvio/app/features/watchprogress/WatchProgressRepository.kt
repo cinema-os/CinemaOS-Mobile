@@ -1491,7 +1491,8 @@ object WatchProgressRepository {
 
     private fun pushScrobbleToServer(entry: WatchProgressEntry, profileId: Int) {
         if (ServerItemRef.isServerId(entry.parentMetaId)) return
-        CinemaOsAccount.service.onProgressSaved(entry)
+        // The CinemaOS sync tags rows with the active profile, so only push the active profile's progress.
+        if (profileId == currentProfileId) CinemaOsAccount.service.onProgressSaved(entry)
         val operationGeneration = profileGeneration.takeIf { profileId == currentProfileId }
         accountScopeSnapshot().launch {
             runCatching {

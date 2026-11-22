@@ -45,6 +45,7 @@ import com.nuvio.app.features.profiles.NuvioProfile
 import com.nuvio.app.features.profiles.ProfileEditScreen
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.profiles.ProfileSelectionScreen
+import com.nuvio.app.features.profiles.ProfileSwitchRequests
 import com.nuvio.app.features.profiles.profileAvatarImageUrl
 import com.nuvio.app.navigation.AppRoute
 import kotlinx.coroutines.launch
@@ -274,28 +275,63 @@ internal fun AppGate(
         }
     }
 
-    // CinemaOS: no profile picker. Always boot into the active (or first) profile and
-    // create a default local profile on first launch.
+    // CinemaOS: "Who's watching" picker as in upstream, plus a default local profile on first launch.
     fun enterProfileGate(profiles: List<NuvioProfile>, syncOnEnter: Boolean) {
         profileSelectionLoading = false
         profileSelectionTransitionActive = false
-        autoSkipProfileSelection = false
-        val profile = profiles.find { it.profileIndex == ProfileRepository.activeProfileId }
-            ?: profiles.firstOrNull()
-        if (profile != null) {
-            selectProfile(profile, sync = syncOnEnter)
-            gateScreen = AppGateScreen.Main.name
+        if (profiles.isEmpty()) {
+            autoSkipProfileSelection = false
+            if (creatingDefaultProfile) return
+            creatingDefaultProfile = true
+            gateScope.launch {
+                ProfileRepository.createProfile(name = "CinemaOS", avatarColorHex = "#1E88E5")
+                ProfileRepository.state.value.profiles.firstOrNull()?.let {
+                    selectProfile(it, sync = syncOnEnter)
+                }
+                gateScreen = AppGateScreen.Main.name
+                creatingDefaultProfile = false
+            }
             return
         }
-        if (creatingDefaultProfile) return
-        creatingDefaultProfile = true
-        gateScope.launch {
-            ProfileRepository.createProfile(name = "CinemaOS", avatarColorHex = "#1E88E5")
-            ProfileRepository.state.value.profiles.firstOrNull()?.let {
-                selectProfile(it, sync = syncOnEnter)
-            }
+
+        rememberedStartupProfile(profiles)?.let { profile ->
+            selectProfile(profile, sync = syncOnEnter)
             gateScreen = AppGateScreen.Main.name
-            creatingDefaultProfile = false
+            autoSkipProfileSelection = false
+            return
+        }
+
+        autoSkipProfileSelection = true
+        if (profiles.size == 1) {
+            val onlyProfile = profiles.first()
+            if (onlyProfile.pinEnabled) {
+                gateScreen = AppGateScreen.ProfileSelection.name
+                return
+            }
+            selectProfile(onlyProfile, sync = syncOnEnter)
+            gateScreen = AppGateScreen.Main.name
+            autoSkipProfileSelection = false
+        } else {
+            gateScreen = AppGateScreen.ProfileSelection.name
+        }
+    }
+
+    fun openProfileSelection() {
+        autoSkipProfileSelection = false
+        profileSelectionLoading = false
+        profileSelectionTransitionActive = false
+        skipProfileSelectionEnterAnimation = false
+        gateScreen = AppGateScreen.ProfileSelection.name
+    }
+
+    // "Switch profile" from screens without a direct callback (Account page profile card).
+    LaunchedEffect(Unit) {
+        ProfileSwitchRequests.requests.collect {
+            if (appGateController != null && !renderMainContent) {
+                appGateController.requestProfileSelection()
+            } else if (gateScreen == AppGateScreen.Main.name) {
+                openProfileSelection()
+            }
         }
     }
 
@@ -484,7 +520,7 @@ internal fun AppGate(
                                     ready && gateScreen == AppGateScreen.Main.name,
                                 )
                             },
-                            onSwitchProfile = {},
+                            onSwitchProfile = { openProfileSelection() },
                         )
                     }
                 }

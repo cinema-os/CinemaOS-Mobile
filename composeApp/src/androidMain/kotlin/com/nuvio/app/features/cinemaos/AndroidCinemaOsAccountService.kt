@@ -11,6 +11,8 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.nuvio.app.features.library.LibraryItem
 import com.nuvio.app.features.library.LibraryRepository
+import com.nuvio.app.features.profiles.MAX_PROFILES
+import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.servers.ServerItemRef
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -58,6 +61,12 @@ private class CinemaOsAuthException(val code: String) : Exception(code)
  * Content ids: the site uses TMDB ids; the app keys content by IMDb id ("tt...") with "tmdb:<id>" as
  * fallback. Anime rows from the site (media_type "anime", AniList ids) are ignored on mobile.
  * Pulls write through the repositories' external-apply paths so nothing echoes back to the site.
+ *
+ * Profiles: the website has no profile concept, so every pushed row carries a client-side marker
+ * (see [CinemaOsProfileMarker]). Pulls only apply rows whose marker matches the active local profile;
+ * unmarked rows (website writes, pre-profile data) belong to profile "1". The server's row id has no
+ * profile in it and its upsert never rewrites `description`, so the first profile to write a title
+ * owns that row: pushes/deletes for a row owned by another profile are skipped (kept local only).
  */
 class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
     private val appContext = context.applicationContext
@@ -82,7 +91,7 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
     private val flushMutex = Mutex()
     private val queueLock = Any()
     private val lastPushAt = ConcurrentHashMap<String, Long>()
-    private val pendingPush = ConcurrentHashMap<String, WatchProgressEntry>()
+    private val pendingPush = ConcurrentHashMap<String, Pair<WatchProgressEntry, Int>>()
 
     private fun CinemaOsStoredSession.toPublic() = CinemaOsAccountSession(label = label, uid = uid, displayName = displayName)
     private val isSignedIn: Boolean get() = stored != null
@@ -100,7 +109,24 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
                 if (isSignedIn) pullAll()
             }
         }
+        // Switching profile reloads Continue Watching / library from the cloud for the new profile.
+        scope.launch {
+            ProfileRepository.state.map { it.activeProfile?.profileIndex }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { index -> if (index != null && isSignedIn) pullAll() }
+        }
     }
+
+    // ---------------------------------------------------------------- Profiles
+
+    private fun activeProfileIndex(): Int = ProfileRepository.activeProfileId
+
+    private fun profileName(index: Int): String =
+        ProfileRepository.state.value.profiles.firstOrNull { it.profileIndex == index }?.name.orEmpty()
+
+    /** Per-profile key for local bookkeeping; profile 1 keeps the pre-profile key so existing data carries over. */
+    private fun profileKey(base: String, index: Int): String = if (index == 1) base else base + "_p" + index
 
     // ---------------------------------------------------------------- Auth
 
@@ -182,12 +208,16 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
         stored = null
         _session.value = null
         synchronized(queueLock) {
-            prefs.edit()
+            val edit = prefs.edit()
                 .remove(K_QUEUE)
-                .remove(K_SYNCED_HISTORY)
-                .remove(K_SYNCED_WATCHLIST)
+                .remove(K_HISTORY_OWNERS)
+                .remove(K_WATCHLIST_OWNERS)
                 .remove(K_LAST_SYNC)
-                .apply()
+            for (index in 1..MAX_PROFILES) {
+                edit.remove(profileKey(K_SYNCED_HISTORY, index))
+                edit.remove(profileKey(K_SYNCED_WATCHLIST, index))
+            }
+            edit.apply()
         }
         _lastSyncedAt.value = 0L
     }
@@ -309,21 +339,29 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
 
     private suspend fun pullHistory() {
         val uid = stored?.uid ?: return
+        val profileIndex = activeProfileIndex()
+        val profileId = profileIndex.toString()
         val (arr, _) = getJsonArray("/api/watch-history") ?: return
         val pendingIds = pendingDocIds("/api/watch-history", uid)
-        val previous = loadMap(K_SYNCED_HISTORY)
+        val previous = loadMap(profileKey(K_SYNCED_HISTORY, profileIndex))
+        val fullView = arr.length() < HISTORY_PAGE_LIMIT
+        val owners: MutableMap<String, String> =
+            if (fullView) LinkedHashMap() else LinkedHashMap(loadMap(K_HISTORY_OWNERS))
         val newSynced = LinkedHashMap<String, String>()
         val entries = mutableListOf<WatchProgressEntry>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val idStr = o.opt("id")?.toString()?.takeIf { it.isNotBlank() && it != "null" } ?: continue
             val mediaType = o.optString("media_type", "movie")
-            if (mediaType == "anime") continue
             val isSeries = mediaType == "tv"
             val season = if (isSeries && o.has("season") && !o.isNull("season")) o.optInt("season") else null
             val episode = if (isSeries && o.has("episode") && !o.isNull("episode")) o.optInt("episode") else null
             val docId = o.optString("docId").takeIf { it.isNotBlank() }
                 ?: historyDocId(uid, mediaType, idStr, season, episode)
+            val owner = CinemaOsProfileMarker.parse(o.optString("description")).profileId
+            owners[docId] = owner
+            if (mediaType == "anime") continue
+            if (owner != profileId) continue // another local profile's row
             val tmdbNum = idStr.toIntOrNull() ?: continue
             val contentId = resolveContentId(tmdbNum, if (isSeries) "tv" else "movie")
             newSynced[docId] = contentId
@@ -348,19 +386,23 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
                 lastUpdatedEpochMs = watchedAt,
             )
         }
+        synchronized(queueLock) { saveMap(K_HISTORY_OWNERS, owners) }
+        // The user switched profile mid-pull: these rows belong to the previous profile.
+        if (activeProfileIndex() != profileIndex) return
         // applyExternalProgress keeps whichever side is newer and never pushes back.
         if (entries.isNotEmpty()) WatchProgressRepository.applyExternalProgress(entries)
         // Rows pulled earlier that are gone from the cloud (and have no pending write) were deleted
         // elsewhere. The server returns at most 100 rows, so only trust a full view.
-        if (arr.length() < HISTORY_PAGE_LIMIT) {
+        if (fullView) {
             for ((docId, contentId) in previous) {
-                if (docId in newSynced || docId in pendingIds) continue
+                // Still in the cloud but now owned by another profile: keep this profile's local copy.
+                if (docId in newSynced || docId in pendingIds || docId in owners) continue
                 val (type, season, episode) = historyKeyFromDocId(uid, docId) ?: continue
                 if (type == "tv" && (season == null || episode == null)) continue
                 WatchProgressRepository.removeExternalProgress(contentId, season, episode)
             }
         }
-        saveMap(K_SYNCED_HISTORY, newSynced)
+        saveMap(profileKey(K_SYNCED_HISTORY, profileIndex), newSynced)
     }
 
     /** Splits "<uid>_<type>_<id>[_s<n>][_e<n>]" into (type, season, episode). */
@@ -378,6 +420,8 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
 
     private suspend fun pullWatchlist() {
         val uid = stored?.uid ?: return
+        val profileIndex = activeProfileIndex()
+        val profileId = profileIndex.toString()
         val pendingIds = pendingDocIds("/api/watchlist", uid)
         val rows = mutableListOf<JSONObject>()
         var offset = 0
@@ -388,19 +432,24 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
             if (next == null || next <= offset) break
             offset = next
         }
-        val previous = loadMap(K_SYNCED_WATCHLIST)
+        val previous = loadMap(profileKey(K_SYNCED_WATCHLIST, profileIndex))
+        val owners = LinkedHashMap<String, String>()
         val newSynced = LinkedHashMap<String, String>() // docId -> "<type>|<contentId>"
         for (o in rows) {
             val idStr = o.opt("id")?.toString()?.takeIf { it.isNotBlank() && it != "null" } ?: continue
             val movieType = o.optString("movie_type", "movie")
-            if (movieType == "anime") continue
             val docId = watchlistDocId(uid, movieType, idStr)
+            val marker = CinemaOsProfileMarker.parse(o.optString("description"))
+            owners[docId] = marker.profileId
+            if (movieType == "anime") continue
+            if (marker.profileId != profileId) continue // another local profile's row
             val isSeries = movieType != "movie"
             val type = if (isSeries) "series" else "movie"
             val tmdbNum = idStr.toIntOrNull() ?: continue
             val id = resolveContentId(tmdbNum, if (isSeries) "tv" else "movie")
             newSynced[docId] = "$type|$id"
             if (docId in pendingIds) continue
+            if (activeProfileIndex() != profileIndex) continue
             if (LibraryRepository.cinemaOsHasLocal(id, type)) continue
             LibraryRepository.cinemaOsSave(
                 LibraryItem(
@@ -409,26 +458,41 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
                     name = o.optString("name").ifBlank { "Unknown" },
                     poster = if (id.startsWith("tt")) "https://images.metahub.space/poster/medium/$id/img" else null,
                     banner = backdropUrl(o.optString("backdrop_path")),
-                    description = o.optString("description").takeIf { it.isNotBlank() },
+                    description = marker.description.takeIf { it.isNotBlank() },
                     imdbId = id.takeIf { it.startsWith("tt") },
                     tmdbId = tmdbNum,
                     savedAtEpochMs = toMs(o.opt("addedAt")).takeIf { it > 0 } ?: System.currentTimeMillis(),
                 ),
             )
         }
+        synchronized(queueLock) { saveMap(K_WATCHLIST_OWNERS, owners) }
+        if (activeProfileIndex() != profileIndex) return
         // Rows synced before but missing now (no pending write) were removed on another device.
         for ((docId, ref) in previous) {
-            if (docId in newSynced || docId in pendingIds) continue
+            if (docId in newSynced || docId in pendingIds || docId in owners) continue
             val type = ref.substringBefore('|')
             val id = ref.substringAfter('|', "")
             if (id.isNotBlank()) LibraryRepository.cinemaOsRemove(id, type)
         }
-        saveMap(K_SYNCED_WATCHLIST, newSynced)
+        saveMap(profileKey(K_SYNCED_WATCHLIST, profileIndex), newSynced)
     }
 
     // ---- Push: watch history ----
 
-    private fun progressKey(e: WatchProgressEntry) = "${e.parentMetaId}|${e.seasonNumber}|${e.episodeNumber}"
+    private fun progressKey(e: WatchProgressEntry, profileIndex: Int) =
+        "$profileIndex|${e.parentMetaId}|${e.seasonNumber}|${e.episodeNumber}"
+
+    /** True when the last pull saw [docId] owned by a different local profile (see class doc). */
+    private fun ownedByOtherProfile(ownersKey: String, docId: String, profileIndex: Int): Boolean {
+        val owner = loadMap(ownersKey)[docId] ?: return false
+        return owner != profileIndex.toString()
+    }
+
+    private fun setOwner(ownersKey: String, docId: String, profileIndex: Int?) = synchronized(queueLock) {
+        val map = LinkedHashMap(loadMap(ownersKey))
+        if (profileIndex == null) map.remove(docId) else map[docId] = profileIndex.toString()
+        saveMap(ownersKey, map)
+    }
 
     private fun isPushable(e: WatchProgressEntry): Boolean =
         isSignedIn && !ServerItemRef.isServerId(e.parentMetaId) && e.durationMs > 0L &&
@@ -437,28 +501,30 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
     /** Throttled to ~60 s per item (the website saves every 60 s) with a trailing push; completed marks push immediately. */
     override fun onProgressSaved(entry: WatchProgressEntry) {
         if (!isPushable(entry)) return
-        val key = progressKey(entry)
+        val profileIndex = activeProfileIndex()
+        val key = progressKey(entry, profileIndex)
         val now = System.currentTimeMillis()
         val last = lastPushAt[key] ?: 0L
         if (now - last >= PUSH_INTERVAL_MS || entry.isEffectivelyCompleted) {
             lastPushAt[key] = now
             pendingPush.remove(key)
-            scope.launch { pushProgress(entry) }
-        } else if (pendingPush.put(key, entry) == null) {
+            scope.launch { pushProgress(entry, profileIndex) }
+        } else if (pendingPush.put(key, entry to profileIndex) == null) {
             scope.launch {
                 delay(PUSH_INTERVAL_MS - (now - last))
-                pendingPush.remove(key)?.let {
+                pendingPush.remove(key)?.let { (pending, pendingProfile) ->
                     lastPushAt[key] = System.currentTimeMillis()
-                    pushProgress(it)
+                    pushProgress(pending, pendingProfile)
                 }
             }
         } else {
-            pendingPush[key] = entry
+            pendingPush[key] = entry to profileIndex
         }
     }
 
     override fun onProgressRemoved(entries: Collection<WatchProgressEntry>) {
         val uid = stored?.uid ?: return
+        val profileIndex = activeProfileIndex()
         scope.launch {
             runCatching {
                 for (e in entries) {
@@ -466,19 +532,27 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
                     val mediaType = if (isSeries) "tv" else "movie"
                     val mediaId = TmdbService.ensureTmdbId(e.parentMetaId, mediaType) ?: continue
                     val docId = historyDocId(uid, mediaType, mediaId, e.seasonNumber, e.episodeNumber)
+                    // Never delete another profile's cloud row.
+                    if (ownedByOtherProfile(K_HISTORY_OWNERS, docId, profileIndex)) continue
                     enqueue(uid, "/api/watch-history", "DELETE", docId, "")
+                    setOwner(K_HISTORY_OWNERS, docId, null)
                 }
                 flushQueue()
             }.onFailure { Log.w(TAG, "history delete failed", it) }
         }
     }
 
-    private suspend fun pushProgress(e: WatchProgressEntry) {
+    private suspend fun pushProgress(e: WatchProgressEntry, profileIndex: Int) {
         runCatching {
             val uid = stored?.uid ?: return
             val isSeries = e.parentMetaType.equals("series", true) || e.seasonNumber != null
             val mediaType = if (isSeries) "tv" else "movie"
             val mediaId = TmdbService.ensureTmdbId(e.parentMetaId, mediaType) ?: return
+            val docId = historyDocId(uid, mediaType, mediaId, e.seasonNumber, e.episodeNumber)
+            // The server upsert keeps the first writer's description (marker), so writing here
+            // would put this profile's progress on another profile's row. Keep it local instead.
+            if (ownedByOtherProfile(K_HISTORY_OWNERS, docId, profileIndex)) return
+            val profileName = profileName(profileIndex)
             val completed = e.isEffectivelyCompleted
             val durationSec = e.durationMs / 1000
             val progressSec = if (completed) durationSec else e.lastPositionMs / 1000
@@ -489,15 +563,17 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
                 .put("progress", progressSec)
                 .put("duration", durationSec)
                 .put("backdrop_path", toBackdropPath(e.background))
-                .put("description", "")
+                .put("description", CinemaOsProfileMarker.mark(profileIndex.toString(), profileName, ""))
+                .put(CinemaOsProfileMarker.FIELD_PROFILE_ID, profileIndex.toString())
+                .put(CinemaOsProfileMarker.FIELD_PROFILE_NAME, profileName)
             if (isSeries && e.episodeNumber != null) {
                 if (e.seasonNumber != null) item.put("season", e.seasonNumber)
                 item.put("episode", e.episodeNumber)
                 // Same string the website's TV player sends.
                 if (e.seasonNumber != null) item.put("lastPosition", "Season ${e.seasonNumber}, Episode ${e.episodeNumber}")
             }
-            val docId = historyDocId(uid, mediaType, mediaId, e.seasonNumber, e.episodeNumber)
             enqueue(uid, "/api/watch-history", "POST", docId, JSONObject().put("userId", uid).put("item", item).toString())
+            setOwner(K_HISTORY_OWNERS, docId, profileIndex)
             flushQueue()
         }.onFailure { Log.w(TAG, "progress push failed", it) }
     }
@@ -507,6 +583,7 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
     override fun onLibraryChanged(item: LibraryItem, added: Boolean) {
         val uid = stored?.uid ?: return
         if (ServerItemRef.isServerId(item.id)) return
+        val profileIndex = activeProfileIndex()
         scope.launch {
             runCatching {
                 val isSeries = !item.type.equals("movie", true)
@@ -514,14 +591,24 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
                 val mediaId = (item.tmdbId?.toString() ?: TmdbService.ensureTmdbId(item.id, type, item.imdbId))
                     ?: return@launch
                 val docId = watchlistDocId(uid, type, mediaId)
+                // Rows owned by another local profile stay untouched (kept local only).
+                if (ownedByOtherProfile(K_WATCHLIST_OWNERS, docId, profileIndex)) return@launch
                 if (added) {
+                    val profileName = profileName(profileIndex)
                     val body = JSONObject().put("id", mediaId).put("name", item.name.ifBlank { "Unknown" })
                         .put("movie_type", type)
                         .put("backdrop_path", toBackdropPath(item.banner))
-                        .put("description", item.description.orEmpty())
+                        .put(
+                            "description",
+                            CinemaOsProfileMarker.mark(profileIndex.toString(), profileName, item.description.orEmpty()),
+                        )
+                        .put(CinemaOsProfileMarker.FIELD_PROFILE_ID, profileIndex.toString())
+                        .put(CinemaOsProfileMarker.FIELD_PROFILE_NAME, profileName)
                     enqueue(uid, "/api/watchlist", "POST", docId, JSONObject().put("userId", uid).put("item", body).toString())
+                    setOwner(K_WATCHLIST_OWNERS, docId, profileIndex)
                 } else {
                     enqueue(uid, "/api/watchlist", "DELETE", docId, "")
+                    setOwner(K_WATCHLIST_OWNERS, docId, null)
                 }
                 flushQueue()
             }.onFailure { Log.w(TAG, "watchlist push failed", it) }
@@ -705,5 +792,7 @@ class AndroidCinemaOsAccountService(context: Context) : CinemaOsAccountService {
         const val K_QUEUE = "pending_writes"
         const val K_SYNCED_HISTORY = "synced_history_docs"
         const val K_SYNCED_WATCHLIST = "synced_watchlist_docs"
+        const val K_HISTORY_OWNERS = "history_doc_owners"
+        const val K_WATCHLIST_OWNERS = "watchlist_doc_owners"
     }
 }

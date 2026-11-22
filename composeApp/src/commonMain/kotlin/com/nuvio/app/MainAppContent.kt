@@ -1472,8 +1472,7 @@ internal fun MainAppContent(
                                 },
                                 onContinueWatchingClick = onContinueWatchingClick,
                                 onContinueWatchingLongPress = onContinueWatchingLongPress,
-                                // CinemaOS: single local profile, so no Switch Profile entry in Settings or its search.
-                                onSwitchProfile = null,
+                                onSwitchProfile = onSwitchProfile,
                                 onSettingsPageClick = if (useNativeNavigation && !isTabletLayout) {
                                     { pageName, title ->
                                         navController.navigate(SettingsPageRoute(pageName, title))
@@ -1556,7 +1555,7 @@ internal fun MainAppContent(
                                 SyncManager.pullAllForProfile(profile.profileIndex)
                             }
                         },
-                        onAddProfileRequested = {},
+                        onAddProfileRequested = onSwitchProfile,
                     )
                 }
                 entry<DetailRoute> { route ->
