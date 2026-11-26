@@ -1,5 +1,6 @@
 package com.nuvio.app
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -259,5 +261,15 @@ internal fun AppLaunchOverlay(
     profile: NuvioProfile?,
     modifier: Modifier = Modifier,
 ) {
-    CinemaOsSplash(modifier = modifier.zIndex(NuvioTokens.Z.dialog))
+    val showIntro by com.nuvio.app.features.settings.CinemaSettingsRepository.showIntro.collectAsState()
+    if (showIntro) {
+        CinemaOsSplash(modifier = modifier.zIndex(NuvioTokens.Z.dialog))
+    } else {
+        // Plain fast launch: a solid themed background until the app content is ready.
+        Box(
+            modifier = modifier
+                .zIndex(NuvioTokens.Z.dialog)
+                .background(MaterialTheme.colorScheme.background),
+        )
+    }
 }

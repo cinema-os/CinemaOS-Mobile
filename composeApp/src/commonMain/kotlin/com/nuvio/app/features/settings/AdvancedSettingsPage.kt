@@ -69,6 +69,15 @@ internal fun LazyListScope.advancedSettingsContent(
                     isTablet = isTablet,
                     onCheckedChange = ProfileRepository::setRememberLastProfileEnabled,
                 )
+                SettingsGroupDivider(isTablet = isTablet)
+                val showIntro by CinemaSettingsRepository.showIntro.collectAsStateWithLifecycle()
+                SettingsSwitchRow(
+                    title = "Show CinemaOS intro on launch",
+                    description = "Play the animated logo intro when the app opens. Off gives a plain, faster launch.",
+                    checked = showIntro,
+                    isTablet = isTablet,
+                    onCheckedChange = CinemaSettingsRepository::setShowIntro,
+                )
             }
         }
     }

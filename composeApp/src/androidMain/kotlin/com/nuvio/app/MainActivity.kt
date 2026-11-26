@@ -89,6 +89,7 @@ open class MainActivity : AppCompatActivity() {
             window.isNavigationBarContrastEnforced = false
             window.isStatusBarContrastEnforced = false
         }
+        com.nuvio.app.core.storage.CinemaPrefs.initialize(applicationContext)
         ThemeSettingsStorage.initialize(applicationContext)
         AppIconPlatform.initialize(applicationContext)
         SentrySettingsStorage.initialize(applicationContext)
