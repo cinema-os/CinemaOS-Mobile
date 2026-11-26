@@ -92,6 +92,7 @@ import nuvio.composeapp.generated.resources.calendar_month_8
 import nuvio.composeapp.generated.resources.calendar_month_9
 import nuvio.composeapp.generated.resources.calendar_month_title
 import nuvio.composeapp.generated.resources.calendar_movie_release
+import nuvio.composeapp.generated.resources.calendar_my_shows
 import nuvio.composeapp.generated.resources.calendar_next_month
 import nuvio.composeapp.generated.resources.calendar_nothing_on_day
 import nuvio.composeapp.generated.resources.calendar_nothing_this_month
@@ -146,6 +147,7 @@ fun CalendarScreen(
     val month = CalendarMonth.fromIso("$monthKey-01") ?: todayMonth
     var selectedDate by rememberSaveable { mutableStateOf<String?>(today) }
     var listView by rememberSaveable { mutableStateOf(false) }
+    var myShowsOnly by rememberSaveable { mutableStateOf(false) }
     var reloadToken by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
@@ -175,7 +177,11 @@ fun CalendarScreen(
             .fold(onSuccess = { CalendarUiState.Loaded(it) }, onFailure = { CalendarUiState.Error })
     }
 
-    val entries = (uiState as? CalendarUiState.Loaded)?.entries.orEmpty()
+    val allEntries = (uiState as? CalendarUiState.Loaded)?.entries.orEmpty()
+    // "My shows": only series from the library / watchlist / Continue Watching.
+    val entries = remember(allEntries, myShowsOnly) {
+        if (myShowsOnly) allEntries.filter { it.fromUserList && !it.isMovie } else allEntries
+    }
     val byDate = remember(entries) { entries.groupBy { it.dateIso } }
     // Keep the selection inside the visible month: today when visible, otherwise the first busy day.
     val effectiveSelected = selectedDate?.takeIf(month::contains)
@@ -194,6 +200,8 @@ fun CalendarScreen(
             month = month,
             isCurrentMonth = month == todayMonth,
             listView = listView,
+            myShowsOnly = myShowsOnly,
+            onToggleMyShows = { myShowsOnly = !myShowsOnly },
             onPrev = { changeMonth(-1) },
             onNext = { changeMonth(1) },
             onToday = {
@@ -368,6 +376,8 @@ private fun CalendarHeader(
     month: CalendarMonth,
     isCurrentMonth: Boolean,
     listView: Boolean,
+    myShowsOnly: Boolean,
+    onToggleMyShows: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onToday: () -> Unit,
@@ -422,6 +432,12 @@ private fun CalendarHeader(
                 },
                 onClick = onToggleView,
             )
+            HeaderPill(
+                text = stringResource(Res.string.calendar_my_shows),
+                icon = null,
+                selected = myShowsOnly,
+                onClick = onToggleMyShows,
+            )
             if (!isCurrentMonth) {
                 HeaderPill(text = stringResource(Res.string.calendar_today), icon = null, onClick = onToday)
             }
@@ -442,12 +458,13 @@ private fun HeaderPill(
     text: String,
     icon: (@Composable (androidx.compose.ui.graphics.Color) -> Unit)?,
     onClick: () -> Unit,
+    selected: Boolean = false,
 ) {
-    val tint = MaterialTheme.colorScheme.onSurface
+    val tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -54,4 +54,5 @@
     <string name="providers_empty_title">Nothing here yet</string>
     <string name="providers_empty_message">Try the other tab or a different sort.</string>
     <string name="providers_load_failed">Couldn't load titles from %1$s</string>
+    <string name="calendar_my_shows">My shows</string>
 </resources>
