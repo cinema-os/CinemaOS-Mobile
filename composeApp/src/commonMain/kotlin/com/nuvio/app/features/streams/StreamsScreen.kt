@@ -470,8 +470,14 @@ private fun MobileStreamsLayout(
                     onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                     onRefresh = onRefresh,
                 )
-                StreamList(
+                var languageFilter by remember { mutableStateOf<String?>(null) }
+                SourceLanguageFilterRow(
                     uiState = uiState,
+                    selected = languageFilter,
+                    onSelected = { languageFilter = it },
+                )
+                StreamList(
+                    uiState = uiState.withLanguageFilter(languageFilter),
                     debridEnabled = debridEnabled,
                     appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                     onStreamSelected = onStreamSelected,

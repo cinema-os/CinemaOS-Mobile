@@ -1,5 +1,7 @@
 package com.nuvio.app.features.streams
 
+import com.nuvio.app.features.settings.CinemaSettingsRepository
+
 /**
  * Auto-pick ranking shared with the CinemaOS TV app: provider priority first
  * (Movy > HdHub > Wing > MovieBox; anime: Anikoto > AnimeWorld > KickAssAnime > AnimeSalt > MegaPlay),
@@ -107,23 +109,45 @@ internal object AutoPlayRanking {
         return if (light.isEmpty()) streams else streams.filter { !isHeavy(it, isSeries) }
     }
 
+    private class Ranked(val stream: StreamItem, val index: Int, val lang: SourceLanguageInfo)
+
     /**
-     * Orders [streams] best first. Streams of non-CinemaOS sources are left in their original order
-     * (this only re-ranks when at least one CinemaOS source is present).
+     * Orders [streams] best first: playable streams in the preferred audio language first, then provider
+     * priority, then quality. A MovieBox dub in a non-preferred language never leads while a MovieBox
+     * "Original Audio" link of at least 480p exists. Streams of non-CinemaOS sources are left in their original
+     * order (this only re-ranks when at least one CinemaOS source is present).
      */
-    fun rank(streams: List<StreamItem>, isSeries: Boolean): List<StreamItem> {
+    fun rank(
+        streams: List<StreamItem>,
+        isSeries: Boolean,
+        preferredLanguage: String = CinemaSettingsRepository.preferredAudioLanguage.value,
+    ): List<StreamItem> {
         if (streams.none { providerRank(it.addonName) > 0 }) return streams
         val light = deprioritiseHeavy(streams, isSeries)
         val heavy = streams.filterNot { it in light }
         val caps = DeviceVideoCapabilities.caps()
-        val ordered = light.withIndex().sortedWith(
-            compareByDescending<IndexedValue<StreamItem>> { providerRank(it.value.addonName) }
-                .thenByDescending { playableHeight(it.value) }
-                .thenByDescending { if (isWebDlOrHls(it.value)) 1 else 0 }
+        val ranked = light.mapIndexed { i, s -> Ranked(s, i, SourceLanguage.of(s)) }
+        val hasMovieBoxOriginal = ranked.any {
+            it.stream.addonName.contains("MovieBox", true) &&
+                it.lang.kind == StreamAudioKind.ORIGINAL &&
+                playableHeight(it.stream) >= 480
+        }
+        fun isForeignMovieBoxDub(r: Ranked) =
+            hasMovieBoxOriginal &&
+                r.stream.addonName.contains("MovieBox", true) &&
+                r.lang.kind == StreamAudioKind.DUB &&
+                preferredLanguage !in r.lang.codes
+        val (demoted, kept) = ranked.partition { isForeignMovieBoxDub(it) }
+        val ordered = kept.sortedWith(
+            compareByDescending<Ranked> { if (playableHeight(it.stream) > 0) 1 else 0 }
+                .thenByDescending { SourceLanguage.tier(it.lang, preferredLanguage) }
+                .thenByDescending { providerRank(it.stream.addonName) }
+                .thenByDescending { playableHeight(it.stream) }
+                .thenByDescending { if (isWebDlOrHls(it.stream)) 1 else 0 }
                 // A stream that fits the display natively beats a downscaled bigger one.
-                .thenByDescending { if (declaredHeight(it.value) <= caps.maxDisplayHeight) 1 else 0 }
+                .thenByDescending { if (declaredHeight(it.stream) <= caps.maxDisplayHeight) 1 else 0 }
                 .thenBy { it.index },
-        ).map { it.value }
-        return ordered + heavy
+        ).map { it.stream }
+        return ordered + demoted.map { it.stream } + heavy
     }
 }

@@ -36,7 +36,7 @@ class WingScraper(private val http: CinemaHttp) : CinemaScraper {
             val q = qualityLabel(l.opt("quality"))
             val name = l.str("name") ?: l.str("source") ?: ""
             val size = l.str("size") ?: ""
-            out += Cand(url, q, size, langsOf(name).joinToString(", "), "Wing · ${l.str("source") ?: l.str("provider") ?: ""} · $name")
+            out += Cand(url, q, size, langsOf(name).joinToString(", ").ifEmpty { "English" }, "Wing · ${l.str("source") ?: l.str("provider") ?: ""} · $name")
         }
         val cands = out.sortedByDescending { it.rank }
             .filter { !BAD_HOST.containsMatchIn(it.url) }
@@ -45,7 +45,11 @@ class WingScraper(private val http: CinemaHttp) : CinemaScraper {
             items = cands,
             timeoutMs = 12_000,
             enough = { false }
-        ) { c -> if (http.isVideo(c.url, emptyMap(), timeoutMs = 7_000)) c else null }
+        ) { c ->
+            // Fast HEAD first: Cloudflare challenge / HTML / dead links never reach the heavier Range probe.
+            if (!http.headLooksPlayable(c.url, emptyMap(), timeoutMs = 3_000)) return@parallelUntil null
+            if (http.isVideo(c.url, emptyMap(), timeoutMs = 7_000)) c else null
+        }
         return verified.sortedByDescending { it.rank }.map { c ->
             PluginRuntimeResult(
                 name = c.quality + (if (c.size.isNotEmpty()) " · ${c.size}" else ""),
@@ -79,7 +83,7 @@ class WingScraper(private val http: CinemaHttp) : CinemaScraper {
 
     private companion object {
         const val API = "https://downloads2.wing.st"
-        // a.111477.xyz 307s to an HTML "bulk download" page (403 to players) - never playable.
+        // a.111477.xyz / p.111477.xyz sit behind a Cloudflare JavaScript challenge (HTML page, 403 to players); it is not bypassed.
         val BAD_HOST = Regex("^https?://(a|p)\\.111477\\.xyz/", RegexOption.IGNORE_CASE)
         val LANGS = listOf("Hindi", "English", "Tamil", "Telugu", "Malayalam", "Kannada", "Bengali", "Japanese", "Korean", "Spanish", "French")
     }

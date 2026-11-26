@@ -45,6 +45,7 @@ import nuvio.composeapp.generated.resources.brand_hdr10plus
 import nuvio.composeapp.generated.resources.cinemaos_player_source_download
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import com.nuvio.app.features.streams.StreamAudioKind
 import com.nuvio.app.features.streams.StreamItem
 
 private enum class ChipTone { Quality, Accent, Neutral }
@@ -207,6 +208,12 @@ internal fun StreamInfoChipRow(info: ParsedStreamInfo, modifier: Modifier = Modi
                 )
                 BadgeText("MULTI AUDIO", color)
             }
+        }
+        when (info.audioKind) {
+            StreamAudioKind.DUB -> LabelBadge("DUB", ChipTone.Accent)
+            StreamAudioKind.SUB -> LabelBadge("SUB", ChipTone.Accent)
+            StreamAudioKind.ORIGINAL -> LabelBadge("ORIGINAL AUDIO")
+            else -> Unit
         }
     }
 }

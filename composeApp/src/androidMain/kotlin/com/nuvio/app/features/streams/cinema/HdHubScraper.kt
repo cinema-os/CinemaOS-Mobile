@@ -32,8 +32,20 @@ class HdHubScraper(private val http: CinemaHttp) : CinemaScraper {
         val brief = http.tmdbBrief(type, req.tmdbId)
         val imdb = brief.imdbId
         if (imdb.isBlank()) return emptyList()
+        // Circuit breaker: after two timeouts in a row the addon is skipped for five minutes.
+        if (System.currentTimeMillis() < skipUntil) return emptyList()
         val path = if (req.isMovie) "movie/$imdb" else "series/$imdb%3A${req.season}%3A${req.episode}"
-        val res = http.fetch("$BASE/stream/$path.json", timeoutMs = 8_000, maxBytes = 2 * 1024 * 1024) ?: return emptyList()
+        val res = kotlinx.coroutines.withTimeoutOrNull(ANSWER_TIMEOUT_MS) {
+            http.fetch("$BASE/stream/$path.json", timeoutMs = ANSWER_TIMEOUT_MS, maxBytes = 2 * 1024 * 1024)
+        }
+        if (res == null) {
+            if (++timeouts >= 2) {
+                skipUntil = System.currentTimeMillis() + SKIP_MS
+                timeouts = 0
+            }
+            return emptyList()
+        }
+        timeouts = 0
         if (!res.ok) return emptyList()
         val streams = runCatching { JSONObject(res.text).optJSONArray("streams") }.getOrNull() ?: return emptyList()
 
@@ -83,7 +95,10 @@ class HdHubScraper(private val http: CinemaHttp) : CinemaScraper {
             if (good) c else null
         }
 
-        return ok.sortedBy { rank(it.n) }.map { x ->
+        // Every link the addon returned is kept: the ones that passed the probe lead, the rest follow.
+        val okSet = ok.toHashSet()
+        val unverified = cands.filter { it !in okSet }
+        return (ok.sortedBy { rank(it.n) } + unverified.sortedBy { rank(it.n) }).map { x ->
             PluginRuntimeResult(
                 name = "HDHub · ${x.host} · ${x.quality}",
                 title = x.label.replace(Regex("\\.(mkv|mp4|avi|webm|m4v)$", RegexOption.IGNORE_CASE), "").replace('.', ' ').replace('_', ' ').trim(),
@@ -153,6 +168,11 @@ class HdHubScraper(private val http: CinemaHttp) : CinemaScraper {
 
     private companion object {
         const val BASE = "https://hdhub.thevolecitor.qzz.io/eyJ0b3Jib3giOiJ1bnNldCIsInF1YWxpdGllcyI6IjIxNjBwLDEwODBwLDcyMHAiLCJzb3J0IjoiZGVzYyJ9"
-        const val MAX_CANDIDATES = 80
+        const val MAX_CANDIDATES = 120
+        const val ANSWER_TIMEOUT_MS = 8_000L
+        const val SKIP_MS = 5 * 60_000L
+
+        @Volatile private var timeouts = 0
+        @Volatile private var skipUntil = 0L
     }
 }

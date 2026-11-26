@@ -18,7 +18,7 @@ class MovyScraper(private val http: CinemaHttp) : CinemaScraper {
     override val id = "cinemaos-movy"
     override val name = "CinemaOS · Movy"
     override val description = "Movy (movy.sx) HLS / MP4 streams"
-    override val budgetMs = 14_000L
+    override val budgetMs = 19_000L
 
     private data class Src(val url: String, val quality: String, val type: String, val shard: String)
     private data class ShardResult(val shard: String, val data: JSONObject)
@@ -93,8 +93,20 @@ class MovyScraper(private val http: CinemaHttp) : CinemaScraper {
                 }
             }
         }
-        val sorted = streams.sortedByDescending { rank(it.quality) }
         val headers = mapOf("User-Agent" to UA) + SITE_HEADERS
+
+        // Real resolution from the HLS master RESOLUTION= (Movy's "1080p" server really tops out at 720p) and a token
+        // check: links whose playlist / first segment does not answer (expired / IP-bound token) are dropped.
+        val checked = parallelUntil<Src, Src>(
+            items = streams,
+            timeoutMs = 6_500,
+            enough = { false },
+        ) { st ->
+            if (st.type != "hls") return@parallelUntil st
+            val real = verifiedHeight(st.url, headers) ?: return@parallelUntil null
+            if (real > 0) st.copy(quality = "${real}p") else st
+        }
+        val sorted = checked.sortedByDescending { rank(it.quality) }
 
         // No pre-verification (the RN app returns the shard answers straight away): shard CDN checks used to push
         // the scraper past its budget and drop every result.
@@ -106,6 +118,7 @@ class MovyScraper(private val http: CinemaHttp) : CinemaScraper {
                     url = st.url,
                     quality = st.quality,
                     provider = "Movy",
+                    language = "English",
                     type = st.type,
                     headers = headers,
                     subtitles = subtitles
@@ -157,6 +170,18 @@ class MovyScraper(private val http: CinemaHttp) : CinemaScraper {
         }
         if (!ok) CinemaHttp.deadHosts[host] = System.currentTimeMillis()
         return ok
+    }
+
+    /**
+     * Walks master -> variant -> first segment. Returns the best RESOLUTION= height declared by the master
+     * (0 when the playlist is not a master), or null when the playlist or its first segment fails.
+     */
+    private suspend fun verifiedHeight(url: String, headers: Map<String, String>): Int? {
+        val master = http.fetch(url, headers, timeoutMs = 5_000, maxBytes = 512 * 1024)
+        if (master == null || !master.ok || !master.text.contains("#EXTM3U")) return null
+        val height = Regex("RESOLUTION=\\d+x(\\d+)", RegexOption.IGNORE_CASE)
+            .findAll(master.text).mapNotNull { it.groupValues[1].toIntOrNull() }.maxOrNull() ?: 0
+        return if (playlistOk(url, headers)) height else null
     }
 
     private fun resolveUrl(base: String, ref: String): String {

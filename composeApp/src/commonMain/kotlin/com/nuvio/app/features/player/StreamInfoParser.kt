@@ -1,5 +1,7 @@
 package com.nuvio.app.features.player
 
+import com.nuvio.app.features.streams.SourceLanguage
+import com.nuvio.app.features.streams.StreamAudioKind
 import com.nuvio.app.features.streams.StreamItem
 import kotlin.math.round
 
@@ -26,6 +28,7 @@ internal data class ParsedStreamInfo(
     val sourceTypes: List<String> = listOfNotNull(sourceType),
     val languages: List<StreamLanguage> = emptyList(),
     val multiAudio: Boolean = false,
+    val audioKind: StreamAudioKind = StreamAudioKind.UNKNOWN,
     val releaseKey: String = "",
 )
 
@@ -68,11 +71,11 @@ private val LANGS = listOf(
     LangDef("Bengali", "🇧🇩", listOf("bengali", "bangla"), listOf("ben", "bn")),
     LangDef("Punjabi", "🇮🇳", listOf("punjabi"), listOf("pun", "pa")),
     LangDef("Marathi", "🇮🇳", listOf("marathi"), listOf("mar", "mr")),
-    LangDef("Spanish", "🇪🇸", listOf("spanish", "espanol", "latino"), listOf("spa", "es")),
+    LangDef("Spanish", "🇪🇸", listOf("spanish", "espanol", "latino", "esla", "latam"), listOf("spa", "es")),
     LangDef("French", "🇫🇷", listOf("french", "francais"), listOf("fre", "fra", "fr")),
     LangDef("German", "🇩🇪", listOf("german", "deutsch"), listOf("ger", "deu", "de")),
     LangDef("Italian", "🇮🇹", listOf("italian", "italiano"), listOf("ita", "it")),
-    LangDef("Portuguese", "🇧🇷", listOf("portuguese"), listOf("por", "pt")),
+    LangDef("Portuguese", "🇧🇷", listOf("portuguese", "ptbr", "pt-br", "brazilian"), listOf("por", "pt")),
     LangDef("Russian", "🇷🇺", listOf("russian"), listOf("rus", "ru")),
     LangDef("Japanese", "🇯🇵", listOf("japanese"), listOf("jpn", "jap", "ja")),
     LangDef("Korean", "🇰🇷", listOf("korean"), listOf("kor", "ko")),
@@ -207,6 +210,7 @@ internal fun parseStreamInfo(texts: List<String?>, videoSizeBytes: Long? = null)
         sourceTypes = sourceTypes,
         languages = langs,
         multiAudio = multi,
+        audioKind = SourceLanguage.parse(text).kind,
         releaseKey = key,
     )
 }

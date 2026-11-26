@@ -65,6 +65,8 @@ class CinemaHttp {
             if (method == "POST") {
                 val ct = headers.entries.firstOrNull { it.key.equals("Content-Type", true) }?.value
                 builder.post((body ?: "").toRequestBody(ct?.toMediaTypeOrNull()))
+            } else if (method == "HEAD") {
+                builder.head()
             } else {
                 builder.get()
             }
@@ -206,6 +208,71 @@ class CinemaHttp {
     }
 
     private val probeCache = ConcurrentHashMap<String, Pair<Long, Boolean>>()
+
+    /**
+     * Fast HEAD probe: false only when the link clearly is not a media file (network failure, 4xx / 5xx other than
+     * "HEAD not allowed", or an HTML answer such as a Cloudflare challenge page).
+     */
+    suspend fun headLooksPlayable(url: String, headers: Map<String, String> = emptyMap(), timeoutMs: Long = 3_000): Boolean {
+        val r = fetch(url, headers, method = "HEAD", timeoutMs = timeoutMs, maxBytes = 1) ?: return false
+        if (r.code == 405 || r.code == 501) return true
+        if (!r.ok) return false
+        return !Regex("text/html|application/json", RegexOption.IGNORE_CASE).containsMatchIn(r.header("content-type"))
+    }
+
+    private fun u32(b: ByteArray, o: Int): Long =
+        ((b[o].toLong() and 0xff) shl 24) or ((b[o + 1].toLong() and 0xff) shl 16) or
+            ((b[o + 2].toLong() and 0xff) shl 8) or (b[o + 3].toLong() and 0xff)
+
+    private fun u64(b: ByteArray, o: Int): Long = (u32(b, o) shl 32) or u32(b, o + 4)
+
+    /**
+     * Duration in seconds of an MP4 read from its moov / mvhd box with small Range requests (walks top-level boxes,
+     * so a moov at the end of the file costs one extra request). Null when it cannot be determined.
+     */
+    suspend fun mp4DurationSec(url: String, headers: Map<String, String>, timeoutMs: Long = 6_000): Double? {
+        var offset = 0L
+        var hops = 0
+        while (hops++ < 8) {
+            val r = fetch(
+                url,
+                headers + ("Range" to "bytes=$offset-${offset + 4095}"),
+                timeoutMs = timeoutMs,
+                maxBytes = 4096,
+            ) ?: return null
+            if (!(r.code == 206 || (r.code == 200 && offset == 0L))) return null
+            val b = r.body
+            var p = 0
+            var refetchAt = -1L
+            while (p + 8 <= b.size) {
+                var size = u32(b, p)
+                val type = String(b, p + 4, 4, Charsets.ISO_8859_1)
+                var hdr = 8
+                if (size == 1L) {
+                    if (p + 16 > b.size) { refetchAt = offset + p; break }
+                    size = u64(b, p + 8)
+                    hdr = 16
+                }
+                if (type == "moov") {
+                    val q = p + hdr
+                    if (q + 40 > b.size) { refetchAt = offset + p; break }
+                    if (String(b, q + 4, 4, Charsets.ISO_8859_1) != "mvhd") return null
+                    val version = b[q + 8].toInt()
+                    val scale: Long
+                    val dur: Long
+                    if (version == 1) { scale = u32(b, q + 28); dur = u64(b, q + 32) } else { scale = u32(b, q + 20); dur = u32(b, q + 24) }
+                    return if (scale > 0) dur.toDouble() / scale else null
+                }
+                if (size < hdr || size == 0L) return null
+                if (p + size < b.size) { p += size.toInt(); continue }
+                refetchAt = offset + p + size
+                break
+            }
+            if (refetchAt < 0) return null
+            offset = refetchAt
+        }
+        return null
+    }
 
     /** Same check as the RN app: one 64-byte ranged read; HTML / JSON answers and non-video bodies are dropped. */
     private suspend fun isVideoUncached(url: String, headers: Map<String, String>, timeoutMs: Long): Boolean {

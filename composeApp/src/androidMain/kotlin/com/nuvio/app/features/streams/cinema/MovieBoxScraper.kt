@@ -2,6 +2,7 @@ package com.nuvio.app.features.streams.cinema
 
 import android.util.Base64
 import com.nuvio.app.features.plugins.PluginRuntimeResult
+import com.nuvio.app.features.streams.SourceLanguage
 import com.nuvio.app.features.plugins.PluginSubtitleResult
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -416,8 +417,13 @@ class MovieBoxScraper(private val http: CinemaHttp) : CinemaScraper {
         if (dubs != null) for (i in 0 until dubs.length()) {
             val dub = dubs.optJSONObject(i) ?: continue
             if (dub.anyStr("subjectId") == subjectId) originalLang = dub.str("lanName") ?: "Original"
-            else subjects += Subj(dub.anyStr("subjectId"), dub.str("lanName") ?: "", dub.str("detailPath"))
+            else subjects += Subj(dub.anyStr("subjectId"), niceDubLabel(dub.str("lanName") ?: ""), dub.str("detailPath"))
         }
+        // "Original Audio" becomes "<title language> (Original Audio)" so the app can tell English originals from foreign ones.
+        val tmdb = http.tmdbDetails(type, req.tmdbId)
+        val originalCode = tmdb?.str("original_language")
+        originalLang = if (originalCode != null) "${SourceLanguage.labelOf(originalCode)} (Original Audio)" else "Original Audio"
+        val runtimeMin = runtimeMinutes(tmdb, type)
         val detailPath = d?.optJSONObject("subject")?.str("detailPath")
             ?: d?.str("detailPath")
             ?: d?.str("detailUrl")?.substringAfterLast('/')?.substringBefore('?')?.takeIf { it.isNotEmpty() }
@@ -466,17 +472,20 @@ class MovieBoxScraper(private val http: CinemaHttp) : CinemaScraper {
             .filter { !(it.subjectId != null && it.subjectId != subjectId && it.url.substringBefore('?') in origUrls) }
             .sortedWith(compareBy<MbStream> { it.cdnThrottled }.thenByDescending { it.qualityNum })
 
+        // Files far shorter than the title (half-episode "dub" cuts) are not a real version of it.
+        val complete = if (runtimeMin > 0) dropShortFiles(filtered, runtimeMin) else filtered
+
         // Per-link subtitles (first few unique links only), bounded so they never delay playback by more than a moment.
         val capByUrl = HashMap<String, List<Cap>>()
         val seenRef = HashSet<String>()
-        val refs = filtered.filter { it.subjectId != null && it.streamId.isNotEmpty() && seenRef.add(it.subjectId + "|" + it.streamId) }
+        val refs = complete.filter { it.subjectId != null && it.streamId.isNotEmpty() && seenRef.add(it.subjectId + "|" + it.streamId) }
         withTimeoutOrNull(4_000) {
             coroutineScope {
                 refs.take(4).map { st ->
                     async {
                         val caps = runCatching { getSubtitles(st.subjectId!!, st.streamId) }.getOrDefault(emptyList())
                         synchronized(capByUrl) {
-                            filtered.forEach { x ->
+                            complete.forEach { x ->
                                 if (x.subjectId == st.subjectId && x.streamId == st.streamId) capByUrl[x.url + "|" + x.streamId] = caps
                             }
                         }
@@ -487,7 +496,7 @@ class MovieBoxScraper(private val http: CinemaHttp) : CinemaScraper {
 
         val shared = synchronized(captions) { captions.toList() }.map { PluginSubtitleResult(url = it.url, language = it.label, name = "MovieBox") }
         val seenKeys = HashSet<String>()
-        val out = filtered
+        val out = complete
             .filter { seenKeys.add(it.url + "|" + it.quality + "|" + it.language) }
             .map { st ->
                 val own = (synchronized(capByUrl) { capByUrl[st.url + "|" + st.streamId] } ?: emptyList())
@@ -506,6 +515,49 @@ class MovieBoxScraper(private val http: CinemaHttp) : CinemaScraper {
             }
         if (out.isNotEmpty()) resultCache[cacheKey] = System.currentTimeMillis() to out
         return out
+    }
+
+    /** "ptbr dub" -> "Portuguese (BR) Dub", "esla dub" -> "Spanish (LatAm) Dub"; unknown labels pass through. */
+    private fun niceDubLabel(raw: String): String {
+        val info = SourceLanguage.parse(raw)
+        val code = info.primary ?: return raw
+        val lower = raw.lowercase()
+        val region = when {
+            Regex("pt[-_ ]?br|brazil").containsMatchIn(lower) -> " (BR)"
+            Regex("esla|latam|latino").containsMatchIn(lower) -> " (LatAm)"
+            else -> ""
+        }
+        return "${SourceLanguage.labelOf(code)}$region Dub"
+    }
+
+    private fun runtimeMinutes(tmdb: JSONObject?, type: String): Int {
+        if (tmdb == null) return 0
+        if (type == "movie") return tmdb.optInt("runtime", 0)
+        val list = tmdb.optJSONArray("episode_run_time")
+        val fromList = if (list != null && list.length() > 0) list.optInt(0, 0) else 0
+        if (fromList > 0) return fromList
+        return tmdb.optJSONObject("last_episode_to_air")?.optInt("runtime", 0) ?: 0
+    }
+
+    /** Drops MP4 links whose real duration (mvhd) is under 60 percent of the TMDB runtime. Unknown durations stay. */
+    private suspend fun dropShortFiles(streams: List<MbStream>, runtimeMin: Int): List<MbStream> {
+        val mp4Urls = streams.filter { it.format == "mp4" }.map { it.url }.distinct().take(12)
+        if (mp4Urls.isEmpty()) return streams
+        val headersByUrl = streams.associate { it.url to it.headers }
+        val durations = HashMap<String, Double>()
+        val probed = parallelUntil<String, Pair<String, Double>>(
+            items = mp4Urls,
+            timeoutMs = 8_000,
+            enough = { false },
+        ) { u -> http.mp4DurationSec(u, headersByUrl[u] ?: emptyMap(), 6_000)?.let { u to it } }
+        probed.forEach { durations[it.first] = it.second }
+        val minSec = runtimeMin * 60.0 * 0.6
+        val kept = streams.filter { st ->
+            val d = durations[st.url]
+            d == null || d >= minSec
+        }
+        // A wrong TMDB runtime must never empty the result.
+        return kept.ifEmpty { streams }
     }
 
     private suspend fun scrapeSubject(

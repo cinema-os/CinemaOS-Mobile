@@ -20,6 +20,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.PaddingValues
+import com.nuvio.app.features.streams.SourceLanguageFilterRow
+import com.nuvio.app.features.streams.withLanguageFilter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -111,6 +118,15 @@ fun PlayerSourcesPanel(
 
             Spacer(Modifier.height(12.dp))
 
+            var languageFilter by remember { mutableStateOf<String?>(null) }
+            SourceLanguageFilterRow(
+                uiState = streamsUiState,
+                selected = languageFilter,
+                onSelected = { languageFilter = it },
+                contentPadding = PaddingValues(vertical = 4.dp),
+            )
+            val languageFilteredState = streamsUiState.withLanguageFilter(languageFilter)
+
             // Two columns like the TV and phone apps: sources on the left, the links of the selected one on the right.
             BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 val providerColumnWidth = if (maxWidth < 520.dp) 112.dp else 164.dp
@@ -122,7 +138,7 @@ fun PlayerSourcesPanel(
                     )
                     Spacer(Modifier.width(8.dp))
                     PlayerStreamList(
-                        streamsUiState = streamsUiState,
+                        streamsUiState = languageFilteredState,
                         onStreamSelected = onStreamSelected,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         currentStream = currentStream,

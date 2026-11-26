@@ -40,6 +40,9 @@ import com.nuvio.app.features.player.STREAM_AUTO_PLAY_TIMEOUT_VALUES
 import com.nuvio.app.features.plugins.PluginsUiState
 import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.streams.StreamAutoPlayMode
+import com.nuvio.app.features.streams.SourceLanguage
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.heightIn
 import com.nuvio.app.features.streams.StreamAutoPlaySource
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.StringResource
@@ -52,6 +55,8 @@ internal fun PlaybackStreamSettings(
     settings: PlayerSettingsUiState,
 ) {
     var showReuseCacheDurationDialog by remember { mutableStateOf(false) }
+    var showSourceLanguageDialog by remember { mutableStateOf(false) }
+    val sourceLanguage by CinemaSettingsRepository.preferredAudioLanguage.collectAsStateWithLifecycle()
     var showAutoPlayModeDialog by remember { mutableStateOf(false) }
     var showAutoPlaySourceDialog by remember { mutableStateOf(false) }
     var showAutoPlayAddonSelectionDialog by remember { mutableStateOf(false) }
@@ -72,6 +77,14 @@ internal fun PlaybackStreamSettings(
             isTablet = isTablet,
         ) {
             SettingsGroup(isTablet = isTablet) {
+                SettingsNavigationRow(
+                    title = "Preferred audio language",
+                    description = SourceLanguage.labelOf(sourceLanguage) +
+                        " - sources in this language are tried first and auto-play prefers them",
+                    isTablet = isTablet,
+                    onClick = { showSourceLanguageDialog = true },
+                )
+                SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
                     title = stringResource(Res.string.settings_playback_reuse_last_link),
                     description = stringResource(Res.string.settings_playback_reuse_last_link_description),
@@ -266,6 +279,29 @@ internal fun PlaybackStreamSettings(
             },
             onDismiss = { showReuseCacheDurationDialog = false },
         )
+    }
+
+    if (showSourceLanguageDialog) {
+        DialogSurface(
+            onDismissRequest = { showSourceLanguageDialog = false },
+            title = "Preferred audio language",
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(SourceLanguage.OPTIONS) { (code, label) ->
+                    DialogOption(
+                        text = label,
+                        selected = code == sourceLanguage,
+                        onClick = {
+                            CinemaSettingsRepository.setPreferredAudioLanguage(code)
+                            showSourceLanguageDialog = false
+                        },
+                    )
+                }
+            }
+        }
     }
 
     if (showAutoPlayModeDialog) {
