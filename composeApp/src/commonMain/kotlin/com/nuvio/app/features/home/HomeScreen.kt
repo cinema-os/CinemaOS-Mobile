@@ -1220,6 +1220,17 @@ fun HomeScreen(
                             }
                         }
                     }
+
+                    com.nuvio.app.features.home.components.HomeCountryCatalogs.forEach { (countryCode, countryName) ->
+                        item(key = "home_country_$countryCode", contentType = "country_catalog") {
+                            com.nuvio.app.features.home.components.HomeCountryRow(
+                                countryCode = countryCode,
+                                countryName = countryName,
+                                sectionPadding = homeSectionPadding,
+                                onPosterClick = onPosterClick,
+                            )
+                        }
+                    }
                 }
             }
         }

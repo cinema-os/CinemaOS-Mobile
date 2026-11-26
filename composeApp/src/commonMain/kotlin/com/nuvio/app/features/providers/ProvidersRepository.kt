@@ -162,6 +162,35 @@ object ProvidersRepository {
         ProviderPage(items = items, hasMore = page < totalPages && items.isNotEmpty())
     }
 
+    /**
+     * Popular movies and series made in [countryCode] (TMDB `with_origin_country`), interleaved
+     * so a country row shows both. Returns an empty list on failure.
+     */
+    suspend fun discoverByOriginCountry(countryCode: String): List<MetaPreview> = withContext(Dispatchers.Default) {
+        val apiKey = TmdbSettingsRepository.effectiveApiKey()
+        val language = normalizeTmdbLanguage(TmdbSettingsRepository.snapshot().language)
+        val query = mapOf(
+            "language" to language,
+            "page" to "1",
+            "with_origin_country" to countryCode,
+            "sort_by" to "popularity.desc",
+            "include_adult" to "false",
+        )
+        coroutineScope {
+            val movies = async { fetch<TmdbProviderDiscoverPage>("discover/movie", apiKey, query) }
+            val series = async { fetch<TmdbProviderDiscoverPage>("discover/tv", apiKey, query) }
+            val movieItems = movies.await()?.results.orEmpty().mapNotNull { it.toPreview(isTv = false) }
+            val seriesItems = series.await()?.results.orEmpty().mapNotNull { it.toPreview(isTv = true) }
+            buildList {
+                val max = maxOf(movieItems.size, seriesItems.size)
+                for (i in 0 until max) {
+                    movieItems.getOrNull(i)?.let(::add)
+                    seriesItems.getOrNull(i)?.let(::add)
+                }
+            }
+        }
+    }
+
     private suspend inline fun <reified T> fetch(
         endpoint: String,
         apiKey: String,
