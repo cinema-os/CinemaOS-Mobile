@@ -3,7 +3,6 @@ package com.nuvio.app.features.settings
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 
 internal actual object AppIconPlatform {
     actual val requiresCloseConfirmation: Boolean = true
@@ -29,7 +28,7 @@ internal actual object AppIconPlatform {
     fun initialize(context: Context) {
         val appContext = context.applicationContext
         this.context = appContext
-        restoreDefaultIfNeeded(appContext)
+        ensureDefaultLauncherOnly(appContext)
     }
 
     actual fun currentIconName(): String? {
@@ -56,71 +55,35 @@ internal actual object AppIconPlatform {
         return component(context, className)
     }
 
-    private fun currentIconName(context: Context): String? {
+    /** Icon variants are not switched at runtime: the default launcher alias is always the one in use. */
+    private fun currentIconName(context: Context): String? = null
+
+    /**
+     * Puts every launcher alias back to its manifest state (default alias enabled, the variants disabled). An alias
+     * switched off at runtime by an older version would otherwise leave the app without a launcher entry, and the
+     * state survives in-app updates. Runs on every start.
+     */
+    private fun ensureDefaultLauncherOnly(context: Context) {
         val packageManager = context.packageManager
-        val explicitlyEnabled = launcherComponents.firstOrNull { (_, className) ->
-            packageManager.getComponentEnabledSetting(component(context, className)) ==
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-        }
-        return explicitlyEnabled?.first
-    }
-
-    private fun restoreDefaultIfNeeded(context: Context) {
-        val packageManager = context.packageManager
-        val hasEnabledComponent = launcherComponents.any { (_, className) ->
-            packageManager.getComponentEnabledSetting(component(context, className)) ==
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-        }
-        if (hasEnabledComponent) return
-
-        val defaultClass = launcherComponents.first { it.first == null }.second
-        if (
-            packageManager.getComponentEnabledSetting(component(context, defaultClass)) !=
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-        ) {
-            return
-        }
-        packageManager.setComponentEnabledSetting(
-            component(context, defaultClass),
-            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-            PackageManager.DONT_KILL_APP,
-        )
-    }
-
-    actual suspend fun activateIcon(name: String?): Boolean {
-        val appContext = context ?: return false
-        val selectedClass = launcherComponents.firstOrNull { it.first == name }?.second ?: return false
-        val packageManager = appContext.packageManager
-
-        return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.setComponentEnabledSettings(
-                    launcherComponents.map { (_, className) ->
-                        PackageManager.ComponentEnabledSetting(
-                            component(appContext, className),
-                            if (className == selectedClass) {
-                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                            } else {
-                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-                            },
-                            PackageManager.DONT_KILL_APP,
-                        )
-                    },
-                )
-            } else {
-                launcherComponents.forEach { (_, className) ->
+        runCatching {
+            launcherComponents.forEach { (_, className) ->
+                val component = component(context, className)
+                if (packageManager.getComponentEnabledSetting(component) != PackageManager.COMPONENT_ENABLED_STATE_DEFAULT) {
                     packageManager.setComponentEnabledSetting(
-                        component(appContext, className),
-                        if (className == selectedClass) {
-                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                        } else {
-                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-                        },
+                        component,
+                        PackageManager.COMPONENT_ENABLED_STATE_DEFAULT,
                         PackageManager.DONT_KILL_APP,
                     )
                 }
             }
-        }.isSuccess
+        }
+    }
+
+    /** Icon switching is a no-op (all variants share the CinemaOS icon); the default launcher stays enabled. */
+    actual suspend fun activateIcon(name: String?): Boolean {
+        val appContext = context ?: return false
+        ensureDefaultLauncherOnly(appContext)
+        return true
     }
 
     private fun component(context: Context, className: String): ComponentName =
