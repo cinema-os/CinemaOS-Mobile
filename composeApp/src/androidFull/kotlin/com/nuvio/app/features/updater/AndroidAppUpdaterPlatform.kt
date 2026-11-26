@@ -30,9 +30,9 @@ object AndroidAppUpdaterPlatform {
 
     private val httpClient = OkHttpClient.Builder()
         .dns(com.nuvio.app.core.network.IPv4FirstDns())
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
@@ -48,6 +48,26 @@ object AndroidAppUpdaterPlatform {
     fun isDebugBuild(): Boolean {
         val context = appContext ?: return false
         return context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+    }
+
+    /** Meta Quest headsets report manufacturer "Oculus" (newer builds "Meta") and a "Quest" model. */
+    fun isMetaQuest(): Boolean {
+        val manufacturer = Build.MANUFACTURER.orEmpty()
+        val model = Build.MODEL.orEmpty()
+        val product = Build.PRODUCT.orEmpty()
+        return manufacturer.equals("Oculus", ignoreCase = true) ||
+            model.contains("Quest", ignoreCase = true) ||
+            product.contains("hollywood", ignoreCase = true) ||
+            product.contains("eureka", ignoreCase = true)
+    }
+
+    fun openExternalUrl(url: String): Boolean {
+        val context = appContext ?: return false
+        return runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.isSuccess
     }
 
     fun getIgnoredTag(): String? =

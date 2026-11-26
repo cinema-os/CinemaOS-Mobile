@@ -8,6 +8,9 @@ import org.jetbrains.compose.resources.getString
 actual object AppUpdaterPlatform {
     actual val isSupported: Boolean = false
     actual val isDebugBuild: Boolean = false
+    actual val isMetaQuest: Boolean = false
+
+    actual fun openExternalUrl(url: String): Boolean = false
 
     actual fun getSupportedAbis(): List<String> = emptyList()
 

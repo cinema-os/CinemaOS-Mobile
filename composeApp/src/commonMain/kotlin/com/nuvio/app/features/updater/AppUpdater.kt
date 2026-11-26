@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 
@@ -44,6 +45,10 @@ data class AppUpdaterUiState(
     val errorMessage: String? = null,
     val isDebugTest: Boolean = false,
 )
+
+private const val CHECK_TIMEOUT_MS = 25_000L
+private const val DOWNLOAD_TIMEOUT_MS = 20 * 60_000L
+internal const val QUEST_DOWNLOAD_URL = "https://cinemaos.tech/apps"
 
 class AppUpdaterController internal constructor(
     private val scope: CoroutineScope,
@@ -107,7 +112,9 @@ class AppUpdaterController internal constructor(
             }
 
             val ignoredTag = AppUpdaterPlatform.getIgnoredTag()
-            val result = fetchUpdate(channel)
+            // Never hang on the checking state: give up after 25 s and show the error instead.
+            val result = withTimeoutOrNull(CHECK_TIMEOUT_MS) { fetchUpdate(channel) }
+                ?: Result.failure<AppUpdate>(IllegalStateException(getString(Res.string.updates_check_failed)))
             currentCoroutineContext().ensureActive()
             if (channel != preferences.channel.value) return@launch
 
@@ -191,6 +198,15 @@ class AppUpdaterController internal constructor(
     fun downloadUpdate() {
         if (_uiState.value.isDownloading) return
         val update = _uiState.value.update ?: return
+        if (AppUpdaterPlatform.isMetaQuest) {
+            // Quest cannot install sideloaded updates from inside the app: hand over to the browser download page.
+            if (!AppUpdaterPlatform.openExternalUrl(QUEST_DOWNLOAD_URL)) {
+                scope.launch {
+                    NuvioToastController.show(QUEST_DOWNLOAD_URL)
+                }
+            }
+            return
+        }
         if (_uiState.value.isDebugTest) {
             runDebugDownloadTest()
             return
@@ -210,7 +226,7 @@ class AppUpdaterController internal constructor(
                 )
             }
 
-            val result = AppUpdaterPlatform.downloadApk(
+            val result = withTimeoutOrNull(DOWNLOAD_TIMEOUT_MS) { AppUpdaterPlatform.downloadApk(
                 assetUrl = update.assetUrl,
                 assetName = update.assetName,
             ) { downloadedBytes, totalBytes ->
@@ -223,7 +239,7 @@ class AppUpdaterController internal constructor(
                 _uiState.update { state ->
                     if (state.updateChannel == channel) state.copy(downloadProgress = progress) else state
                 }
-            }
+            } } ?: Result.failure<String>(IllegalStateException(getString(Res.string.updates_download_failed)))
             currentCoroutineContext().ensureActive()
             if (channel != preferences.channel.value) return@launch
             result.onSuccess { path ->

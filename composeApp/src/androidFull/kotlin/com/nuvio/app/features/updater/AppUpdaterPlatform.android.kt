@@ -5,6 +5,11 @@ actual object AppUpdaterPlatform {
     actual val isDebugBuild: Boolean
         get() = AndroidAppUpdaterPlatform.isDebugBuild()
 
+    actual val isMetaQuest: Boolean
+        get() = AndroidAppUpdaterPlatform.isMetaQuest()
+
+    actual fun openExternalUrl(url: String): Boolean = AndroidAppUpdaterPlatform.openExternalUrl(url)
+
     actual fun getSupportedAbis(): List<String> = AndroidAppUpdaterPlatform.getSupportedAbis()
 
     actual fun getIgnoredTag(): String? = AndroidAppUpdaterPlatform.getIgnoredTag()

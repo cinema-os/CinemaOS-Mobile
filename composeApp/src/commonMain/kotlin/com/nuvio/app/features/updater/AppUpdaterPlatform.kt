@@ -4,6 +4,12 @@ expect object AppUpdaterPlatform {
     val isSupported: Boolean
     val isDebugBuild: Boolean
 
+    /** True on Meta Quest headsets, where the in-app APK install is replaced by a download page. */
+    val isMetaQuest: Boolean
+
+    /** Opens [url] in the system browser; false when nothing could handle it. */
+    fun openExternalUrl(url: String): Boolean
+
     fun getSupportedAbis(): List<String>
 
     fun getIgnoredTag(): String?

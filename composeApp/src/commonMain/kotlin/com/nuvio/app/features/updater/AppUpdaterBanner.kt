@@ -245,6 +245,7 @@ private fun AppUpdateBanner(
                         Text(
                             text = when {
                                 state.downloadedApkPath != null -> stringResource(Res.string.action_install)
+                                AppUpdaterPlatform.isMetaQuest -> "Download from cinemaos.tech/apps"
                                 state.errorMessage != null -> stringResource(Res.string.action_retry)
                                 else -> stringResource(Res.string.action_update)
                             },
