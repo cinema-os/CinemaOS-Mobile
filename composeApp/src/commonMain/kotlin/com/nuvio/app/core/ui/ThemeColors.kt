@@ -15,6 +15,8 @@ data class ThemeColorPalette(
     val background: Color = Color(0xFF0D0D0D),
     val backgroundElevated: Color = Color(0xFF1A1A1A),
     val backgroundCard: Color = Color(0xFF242424),
+    /** Light palettes switch the Material scheme and text tokens to dark-on-light. */
+    val isLight: Boolean = false,
 )
 
 private fun contrastRatio(a: Color, b: Color): Float {
@@ -207,6 +209,21 @@ object ThemeColors {
         backgroundCard = Color(0xFF222222),
     )
 
+    /** Light mode: off-white surfaces with a near-black accent. */
+    val Light = ThemeColorPalette(
+        secondary = Color(0xFF18181B),
+        secondaryVariant = Color(0xFF3F3F46),
+        nativeAccentHex = "#18181B",
+        onSecondary = Color(0xFFFAFAFA),
+        onSecondaryVariant = Color(0xFFFAFAFA),
+        focusRing = Color(0xFF18181B),
+        focusBackground = Color(0xFFE4E4E7),
+        background = Color(0xFFF7F7F8),
+        backgroundElevated = Color(0xFFFFFFFF),
+        backgroundCard = Color(0xFFEDEDF0),
+        isLight = true,
+    )
+
     fun getColorPalette(
         theme: AppTheme,
         customColors: CustomThemeColors = CustomThemeColors.Default,
@@ -230,5 +247,6 @@ object ThemeColors {
         AppTheme.AMBER -> Amber
         AppTheme.ROSE -> Rose
         AppTheme.WHITE -> White
+        AppTheme.LIGHT -> Light
     }
 }

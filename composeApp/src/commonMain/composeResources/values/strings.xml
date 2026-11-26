@@ -1473,6 +1473,7 @@
     <string name="theme_rose">Rose</string>
     <string name="theme_violet">Violet</string>
     <string name="theme_white">White</string>
+    <string name="theme_light">Light</string>
     <string name="theme_cinemaos">CinemaOS</string>
     <string name="theme_custom">Custom</string>
     <string name="custom_theme_title">Your custom gradient</string>
