@@ -12,6 +12,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +49,8 @@ fun ProfileAvatarView(
     val emoji = remember(profile?.avatarUrl, avatarItem) {
         profile?.let { profileAvatarEmoji(it, avatarItem) }
     }
-    val hasPicture = imageUrl != null || emoji != null
+    var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+    val hasPicture = (imageUrl != null && !imageFailed) || emoji != null
     val accent = remember(profile?.avatarColorHex, avatarItem) {
         parseHexColor(avatarItem?.bgColor ?: profile?.avatarColorHex ?: PROFILE_COLORS.first())
     }
@@ -63,11 +66,12 @@ fun ProfileAvatarView(
         contentAlignment = Alignment.Center,
     ) {
         when {
-            imageUrl != null -> AsyncImage(
+            imageUrl != null && !imageFailed -> AsyncImage(
                 model = imageUrl,
                 contentDescription = profile?.name,
                 modifier = Modifier.size(size).clip(CircleShape),
                 contentScale = ContentScale.Crop,
+                onError = { imageFailed = true },
             )
             emoji != null -> Text(
                 text = emoji,

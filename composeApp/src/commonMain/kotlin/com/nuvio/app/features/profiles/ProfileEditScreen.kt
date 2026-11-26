@@ -260,6 +260,9 @@ fun ProfileEditScreen(
                             }
                         },
                         placeholder = stringResource(Res.string.profile_custom_avatar_url_placeholder),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
+                        ),
                     )
                     if (avatarUrlIsInvalid) {
                         Text(

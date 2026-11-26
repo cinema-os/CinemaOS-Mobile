@@ -346,12 +346,14 @@ fun NuvioInputField(
     shape: Shape = MaterialTheme.nuvio.shapes.compactCard,
     textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
     trailingContent: (@Composable (() -> Unit))? = null,
+    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
 ) {
     val tokens = MaterialTheme.nuvio
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
+        keyboardOptions = keyboardOptions,
         singleLine = true,
         shape = shape,
         placeholder = {

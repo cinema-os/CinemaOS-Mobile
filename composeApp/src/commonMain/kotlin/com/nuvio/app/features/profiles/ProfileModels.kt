@@ -98,14 +98,24 @@ fun avatarImageUrl(avatar: AvatarCatalogItem): String? =
     avatar.localImageUrl
         ?: avatar.storagePath.takeIf { it.isNotBlank() && !avatar.memberOnly }?.let(::avatarStorageUrl)
 
-fun normalizedAvatarUrl(url: String?): String? =
-    url?.trim()?.takeIf { it.isValidAvatarUrl() }
+fun normalizedAvatarUrl(url: String?): String? {
+    val compact = url?.filterNot { it.isWhitespace() }.orEmpty()
+    if (compact.isEmpty()) return null
+    val withScheme = when {
+        compact.startsWith("https://", ignoreCase = true) || compact.startsWith("http://", ignoreCase = true) -> compact
+        compact.startsWith("//") -> "https:$compact"
+        compact.contains('.') && !compact.contains("://") -> "https://$compact"
+        else -> compact
+    }
+    return withScheme.takeIf { it.isValidAvatarUrl() }
+}
 
 fun String.isValidAvatarUrl(): Boolean {
     val value = trim()
     return value.length <= 2048 &&
         !value.any { it.isWhitespace() } &&
-        (value.startsWith("https://") || value.startsWith("http://"))
+        (value.startsWith("https://", ignoreCase = true) || value.startsWith("http://", ignoreCase = true)) &&
+        value.substringAfter("://").isNotEmpty()
 }
 
 fun profileAvatarImageUrl(profile: NuvioProfile, avatar: AvatarCatalogItem?): String? =
