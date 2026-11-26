@@ -69,6 +69,7 @@ val DiscoverProviderOptions: List<DiscoverNamedOption> = listOf(
     DiscoverNamedOption("283", "Crunchyroll"),
     DiscoverNamedOption("232", "Zee5"),
     DiscoverNamedOption("237", "SonyLiv"),
+    DiscoverNamedOption("386", "Peacock"),
 )
 
 val DiscoverNetworkOptions: List<DiscoverNamedOption> = listOf(

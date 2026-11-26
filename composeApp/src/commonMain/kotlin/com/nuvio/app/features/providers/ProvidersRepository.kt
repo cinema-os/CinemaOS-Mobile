@@ -46,6 +46,7 @@ val CinemaOsStreamingProviders: List<StreamingProvider> = listOf(
     StreamingProvider(283, "Crunchyroll"),
     StreamingProvider(232, "Zee5"),
     StreamingProvider(237, "SonyLiv"),
+    StreamingProvider(386, "Peacock"),
 )
 
 enum class ProviderSort { Popular, TopRated, Newest }
