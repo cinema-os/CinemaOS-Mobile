@@ -70,6 +70,8 @@ fun AudioTrackModal(
     showCenterMix: Boolean = false,
     centerMixLevelDb: Int = 0,
     onCenterMixLevelChanged: (Int) -> Unit = {},
+    animeAudioVariants: List<AnimeAudioVariant> = emptyList(),
+    onAnimeAudioVariantSelected: (AnimeAudioVariant) -> Unit = {},
 ) {
     PlayerOverlayScaffold(
         visible = visible,
@@ -81,8 +83,14 @@ fun AudioTrackModal(
             val railWidth = minOf(maxWidth, 444.dp)
             val railMaxHeight = (maxHeight - 64.dp).coerceAtLeast(120.dp).coerceAtMost(620.dp)
             val panelMaxHeight = maxHeight
-            val hasAdjustments = showAudioDelay || showAudioAmplification || showCenterMix
+            val hasAdjustments = showAudioDelay || showAudioAmplification || showCenterMix || animeAudioVariants.isNotEmpty()
             val adjustments: @Composable () -> Unit = {
+                if (animeAudioVariants.isNotEmpty()) {
+                    AnimeAudioSection(
+                        variants = animeAudioVariants,
+                        onSelected = onAnimeAudioVariantSelected,
+                    )
+                }
                 if (showAudioDelay) {
                     AudioDelaySection(
                         delayMs = audioDelayMs,
@@ -199,6 +207,54 @@ fun AudioTrackModal(
                         }
                     }
                     adjustments()
+                }
+            }
+        }
+    }
+}
+
+/** "Japanese (Sub) / English (Dub) / ..." picker: each choice is backed by a different anime source. */
+@Composable
+private fun AnimeAudioSection(
+    variants: List<AnimeAudioVariant>,
+    onSelected: (AnimeAudioVariant) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = MaterialTheme.nuvio
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Audio",
+            color = Color.White,
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.padding(bottom = 2.dp),
+        )
+        variants.forEach { variant ->
+            val primary = if (variant.isCurrent) tokens.colors.onAccent else Color.White
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (variant.isCurrent) tokens.colors.accent else Color.Transparent)
+                    .clickable(onClick = { onSelected(variant) })
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = variant.label,
+                    color = primary,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (variant.isCurrent) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = null,
+                        tint = primary,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }

@@ -136,8 +136,17 @@ internal fun PlayerScreenModalHosts(
         labelAudioTracksWithLanguages(audioTracks, detectedAudioLanguages)
     }
 
+    val animeAudioVariants = remember(sourceStreamsState.groups, currentStream) {
+        buildAnimeAudioVariants(sourceStreamsState.groups.flatMap { it.streams }, currentStream)
+    }
+
     AudioTrackModal(
         visible = showAudioModal,
+        animeAudioVariants = animeAudioVariants,
+        onAnimeAudioVariantSelected = { variant ->
+            onAudioModalDismissed()
+            if (!variant.isCurrent) onSourceStreamSelected(variant.stream)
+        },
         audioTracks = labeledAudioTracks,
         selectedIndex = selectedAudioIndex,
         onTrackSelected = onAudioTrackSelected,
