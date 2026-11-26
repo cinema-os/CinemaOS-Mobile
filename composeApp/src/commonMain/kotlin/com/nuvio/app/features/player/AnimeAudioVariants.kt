@@ -5,7 +5,7 @@ import com.nuvio.app.features.streams.StreamAudioKind
 import com.nuvio.app.features.streams.StreamItem
 
 /** One audio choice of an anime episode, e.g. "Japanese (Sub)" or "English (Dub)", backed by the best matching source. */
-internal data class AnimeAudioVariant(
+data class AnimeAudioVariant(
     val label: String,
     val stream: StreamItem,
     val isCurrent: Boolean,
