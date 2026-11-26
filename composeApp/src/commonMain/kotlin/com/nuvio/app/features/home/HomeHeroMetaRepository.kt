@@ -143,6 +143,7 @@ internal fun MetaPreview.withHeroMeta(meta: HomeHeroMeta): MetaPreview {
             ?: imdbRating,
         tmdbRating = details?.tmdbRating?.takeIf { it.isNotBlank() } ?: tmdbRating,
         runtime = details?.runtime?.takeIf { it.isNotBlank() } ?: runtime,
+        releaseInfo = details?.releaseInfo?.trim()?.takeIf { Regex("""\d{4}-\d{2}-\d{2}""").containsMatchIn(it) } ?: releaseInfo,
         status = details?.status?.takeIf { it.isNotBlank() } ?: status,
         ageRating = details?.ageRating?.takeIf { it.isNotBlank() } ?: ageRating,
         language = details?.language?.takeIf { it.isNotBlank() } ?: language,

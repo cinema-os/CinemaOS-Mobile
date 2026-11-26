@@ -18,6 +18,15 @@ internal fun formatReleaseDate(
 
 internal expect fun formatCalendarDate(isoDate: String, localeTag: String, includeYear: Boolean): String
 
+/** Locale-aware date with an abbreviated month and the year, e.g. "Sep 25, 2026". */
+internal expect fun formatCalendarDateShort(isoDate: String, localeTag: String): String
+
+/** Short-month full date for meta lines; returns [raw] unchanged when it is not a full date. */
+fun formatReleaseDateShortForDisplay(raw: String): String {
+    val date = parseEpisodeReleaseLocalDate(raw) ?: return raw
+    return formatCalendarDateShort(date, Locale.current.toLanguageTag())
+}
+
 /**
  * Parses a release/air string (ISO date, year-only, or timestamp prefix) for compact UI (e.g. year chips).
  */

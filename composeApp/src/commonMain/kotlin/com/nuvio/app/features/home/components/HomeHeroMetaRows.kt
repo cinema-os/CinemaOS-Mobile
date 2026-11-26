@@ -19,7 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nuvio.app.core.format.formatReleaseDateForDisplay
+import com.nuvio.app.core.format.formatReleaseDateShortForDisplay
 import com.nuvio.app.core.i18n.localizedMediaStatusLabel
 import com.nuvio.app.features.details.components.DetailHeroMetaBadge
 import com.nuvio.app.features.details.components.OverallRating
@@ -51,7 +51,7 @@ internal fun HomeHeroMetaRows(
     }
     val genre = item.genres.firstOrNull()?.takeIf { it.isNotBlank() }
     val runtime = formatRuntimeForDisplay(item.runtime)?.takeIf { it.isNotBlank() }
-    val release = item.releaseInfo?.takeIf { it.isNotBlank() }?.let(::formatReleaseDateForDisplay)
+    val release = item.releaseInfo?.takeIf { it.isNotBlank() }?.let(::formatReleaseDateShortForDisplay)
     val status = item.status?.trim()?.takeIf { it.isNotBlank() }
         ?.let { localizedMediaStatusLabel(it, isSeries).uppercase() }
     val badges = listOfNotNull(item.ageRating?.trim()?.takeIf { it.isNotBlank() }, status)

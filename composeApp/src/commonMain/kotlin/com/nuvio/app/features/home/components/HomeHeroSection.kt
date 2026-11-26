@@ -1,5 +1,6 @@
 package com.nuvio.app.features.home.components
 
+import com.nuvio.app.core.format.formatReleaseDateShortForDisplay
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -545,7 +546,9 @@ private fun HeroBadgeLine(item: MetaPreview, rank: Int) {
         "series", "tv" -> stringResource(Res.string.media_series)
         else -> item.type.replaceFirstChar(Char::uppercase)
     }
-    val year = item.releaseInfo?.trim()?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
+    val year = item.releaseInfo?.trim()?.takeIf { it.length >= 4 && it.take(4).all(Char::isDigit) }?.let {
+        if (it.length >= 10) formatReleaseDateShortForDisplay(it) else it.take(4)
+    }
     val text = listOfNotNull("#$rank ${stringResource(Res.string.home_hero_trending)}", typeLabel, year)
         .joinToString("  \u00B7  ")
         .uppercase()
