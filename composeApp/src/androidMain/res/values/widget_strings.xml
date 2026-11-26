@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_continue_watching_label">CinemaOS — Continue Watching</string>
+    <string name="widget_continue_watching_description">Pick up where you left off.</string>
+    <string name="widget_continue_watching_header">CONTINUE WATCHING</string>
+    <string name="widget_continue_watching_empty">Nothing in progress yet. Start watching in CinemaOS.</string>
+    <string name="widget_upcoming_label">CinemaOS — Upcoming</string>
+    <string name="widget_upcoming_description">New episodes and releases coming up.</string>
+    <string name="widget_upcoming_header">UPCOMING</string>
+    <string name="widget_upcoming_empty">No upcoming episodes yet.</string>
+</resources>

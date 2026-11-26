@@ -30,6 +30,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        com.nuvio.app.features.widgets.HomeWidgetPublisher.initialize(this)
         val cinemaOs = AndroidCinemaOsAccountService(this)
         CinemaOsAccount.service = cinemaOs
         cinemaOs.start()

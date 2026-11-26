@@ -1,5 +1,6 @@
 package com.nuvio.app.features.home
 
+import com.nuvio.app.features.widgets.toHomeWidgetItems
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.MutatePriority
@@ -560,6 +561,13 @@ fun HomeScreen(
         )
     }
     val hasContinueWatchingRows = continueWatchingItems.isNotEmpty() || upcomingItems.isNotEmpty()
+    LaunchedEffect(continueWatchingItems, upcomingItems) {
+        // Feeds the Android home-screen widgets (no-op elsewhere).
+        com.nuvio.app.features.widgets.HomeWidgetPublisher.publish(
+            continueWatching = continueWatchingItems.toHomeWidgetItems(),
+            upcoming = upcomingItems.toHomeWidgetItems(),
+        )
+    }
 
     ScreenActivityEffect(activeProfileId, continueWatchingItems.isNotEmpty(), hasUserScrolledContinueWatching) { active ->
         if (!active) return@ScreenActivityEffect
