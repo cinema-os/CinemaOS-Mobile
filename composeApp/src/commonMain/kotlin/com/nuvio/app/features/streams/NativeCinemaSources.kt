@@ -11,7 +11,7 @@ data class NativeCinemaProvider(
 )
 
 /**
- * Built-in native sources (Movy > HdHub > Wing > MovieBox, in priority order). Implemented on Android;
+ * Built-in native sources (Movy > HdHub > Wing > MovieBox > Hindmoviez > 4KHDHub > VegaMovies > HDhub4u > Movies4u, in priority order). Implemented on Android;
  * other platforms expose none.
  */
 expect object NativeCinemaSources {

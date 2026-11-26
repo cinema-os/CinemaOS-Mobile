@@ -10,7 +10,7 @@ object StreamAutoPlaySelector {
         preferredGroupIds: Set<String> = emptySet(),
     ): List<AddonStreamGroup> {
         if (groups.isEmpty()) return groups
-        // Built-in CinemaOS sources lead, in priority order (Movy > HdHub > Wing > MovieBox).
+        // Built-in CinemaOS sources lead, in priority order (Movy > HdHub > Wing > MovieBox > Hindmoviez > 4KHDHub > VegaMovies > HDhub4u > Movies4u).
         val (nativeGroups, otherGroups) = groups.partition { it.addonId.startsWith("native:") }
         if (nativeGroups.isNotEmpty()) {
             return nativeGroups.sortedByDescending { AutoPlayRanking.providerRank(it.addonName) } +

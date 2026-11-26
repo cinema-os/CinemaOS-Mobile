@@ -279,7 +279,7 @@ private fun CoroutineScope.launchStreamSearchTasks(
     }
 
     if (targets.nativeProviders.isNotEmpty()) {
-        // One provider after the other in priority order (Movy > HdHub > Wing > MovieBox), each result is
+        // One provider after the other in priority order (Movy > HdHub > Wing > MovieBox > Hindmoviez > 4KHDHub > VegaMovies > HDhub4u > Movies4u), each result is
         // reported as soon as it arrives so the best source can start while the rest still loads.
         launch {
             val tmdbId = runCatchingUnlessCancelled {

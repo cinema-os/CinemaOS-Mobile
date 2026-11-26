@@ -173,7 +173,7 @@ object StreamsRepository {
             repositories = pluginUiState.repositories,
             groupByRepository = pluginUiState.groupStreamsByRepository,
         )
-        // Built-in sources (Movy > HdHub > Wing > MovieBox) for movies and non-anime series.
+        // Built-in sources (Movy > HdHub > Wing > MovieBox > Hindmoviez > 4KHDHub > VegaMovies > HDhub4u > Movies4u) for movies and non-anime series.
         val nativeTargets = if (!isNativeServerRequest && supportsNativeSources(type, videoId)) {
             NativeCinemaSources.providers().map { it.toTarget() }
         } else {

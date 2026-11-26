@@ -4,7 +4,7 @@ import com.nuvio.app.features.settings.CinemaSettingsRepository
 
 /**
  * Auto-pick ranking shared with the CinemaOS TV app: provider priority first
- * (Movy > HdHub > Wing > MovieBox; anime: Anikoto > AnimeWorld > KickAssAnime > AnimeSalt > MegaPlay),
+ * (Movy > HdHub > Wing > MovieBox > Hindmoviez > 4KHDHub > VegaMovies > HDhub4u > Movies4u; anime: Anikoto > AnimeWorld > KickAssAnime > AnimeSalt > MegaPlay),
  * then the best quality this device can really play, with oversized (high bitrate) links
  * pushed back when a lighter, acceptable alternative exists.
  */
@@ -25,10 +25,15 @@ internal object AutoPlayRanking {
 
     /** Provider priority; 0 for anything that is not a CinemaOS source. */
     fun providerRank(addonName: String): Int = when {
-        addonName.contains("Movy", true) -> 4
-        addonName.contains("HdHub", true) -> 3
-        addonName.contains("Wing", true) -> 2
-        addonName.contains("MovieBox", true) -> 1
+        addonName.contains("Movy", true) -> 14
+        addonName.contains("4KHDHub", true) -> 9
+        addonName.contains("HDhub4u", true) -> 7
+        addonName.contains("HdHub", true) -> 13
+        addonName.contains("Wing", true) -> 12
+        addonName.contains("MovieBox", true) -> 11
+        addonName.contains("Hindmoviez", true) -> 10
+        addonName.contains("VegaMovies", true) -> 8
+        addonName.contains("Movies4u", true) -> 6
         addonName.contains("Anikoto", true) -> 5
         addonName.contains("AnimeWorld", true) -> 4
         addonName.contains("KickAss", true) -> 3
